@@ -616,60 +616,232 @@ Further investigation is recommended before concluding that the meter is faulty.
 
     return report
 # =====================================
-# RUN ANALYSIS
+# OCR VERIFICATION
 # =====================================
 
-if st.button("🔍 Analyze Meter", type="primary"):
+def verify_ocr_values(meter_data, error_value):
 
-    if actual_img is None or error_img is None:
+    st.subheader("OCR Verification")
 
-        st.warning(
-            "Please upload Actual Values and Accuracy images."
+    st.caption(
+        "Verify OCR readings before running analysis."
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        u1 = st.number_input(
+            "U1 (V)",
+            value=float(meter_data.get("u1", 0))
         )
 
-    else:
+        u2 = st.number_input(
+            "U2 (V)",
+            value=float(meter_data.get("u2", 0))
+        )
 
-        with st.spinner("Running OCR and Analysis..."):
+        u3 = st.number_input(
+            "U3 (V)",
+            value=float(meter_data.get("u3", 0))
+        )
 
-            actual_text = read_image(actual_img)
-            error_text = read_image(error_img)
+        i1 = st.number_input(
+            "I1 (A)",
+            value=float(meter_data.get("i1", 0))
+        )
 
-            meter_data = parse_meter_values(actual_text)
+        i2 = st.number_input(
+            "I2 (A)",
+            value=float(meter_data.get("i2", 0))
+        )
 
-            error_value = extract_error(error_text)
+        i3 = st.number_input(
+            "I3 (A)",
+            value=float(meter_data.get("i3", 0))
+        )
 
-            findings, ranked, recommendations, customer_response = analyze_meter(
-                meter_data,
-                error_value,
-                meter_class,
-                meter_type,
-                complaint_type
+    with col2:
+
+        pf1 = st.number_input(
+            "PF1",
+            value=float(meter_data.get("pf1", 0))
+        )
+
+        pf2 = st.number_input(
+            "PF2",
+            value=float(meter_data.get("pf2", 0))
+        )
+
+        pf3 = st.number_input(
+            "PF3",
+            value=float(meter_data.get("pf3", 0))
+        )
+
+        freq = st.number_input(
+            "Frequency (Hz)",
+            value=float(meter_data.get("freq", 50))
+        )
+
+        accuracy = st.number_input(
+            "Accuracy Error (%)",
+            value=float(error_value or 0)
+        )
+
+    # ==========================
+    # Engineering Validation
+    # ==========================
+
+    if freq < 49 or freq > 51:
+        st.warning(
+            f"Frequency ({freq}Hz) appears abnormal. Please verify."
+        )
+
+    for phase, value in {
+        "U1": u1,
+        "U2": u2,
+        "U3": u3
+    }.items():
+
+        if value < 100 or value > 300:
+            st.warning(
+                f"{phase} appears suspicious ({value}V)"
             )
 
-        st.success("Analysis Completed")
+    for pf_name, value in {
+        "PF1": pf1,
+        "PF2": pf2,
+        "PF3": pf3
+    }.items():
+
+        if value < -1 or value > 1:
+            st.warning(
+                f"{pf_name} appears suspicious ({value})"
+            )
+
+    verified_data = {
+        "u1": u1,
+        "u2": u2,
+        "u3": u3,
+        "i1": i1,
+        "i2": i2,
+        "i3": i3,
+        "pf1": pf1,
+        "pf2": pf2,
+        "pf3": pf3,
+        "freq": freq
+    }
+
+    return verified_data, accuracy
+# =====================================
+# OCR PROCESSING
+# =====================================
+
+if actual_img and error_img:
+
+    with st.spinner("Performing OCR..."):
+
+        actual_text = read_image(actual_img)
+
+        error_text = read_image(error_img)
+
+        meter_data = parse_meter_values(
+            actual_text
+        )
+
+        error_value = extract_error(
+            error_text
+        )
+
+    st.success(
+        "OCR Extraction Completed"
+    )
+
+    with st.expander(
+        "View Raw OCR Output"
+    ):
+
+        st.text(actual_text)
+
+        st.text(error_text)
+
+    verified_data, verified_error = verify_ocr_values(
+        meter_data,
+        error_value
+    )
+
+    if st.button(
+        "✅ Confirm Readings"
+    ):
+
+        st.session_state["verified"] = True
+
+        st.session_state["verified_data"] = verified_data
+
+        st.session_state["verified_error"] = verified_error
+
+# =====================================
+# RUN INVESTIGATION
+# =====================================
+
+if st.session_state.get("verified"):
+
+    if st.button(
+        "🔍 Run Investigation",
+        type="primary"
+    ):
+
+        meter_data = st.session_state[
+            "verified_data"
+        ]
+
+        error_value = st.session_state[
+            "verified_error"
+        ]
+
+        findings, ranked, recommendations, customer_response = analyze_meter(
+            meter_data,
+            error_value,
+            meter_class,
+            meter_type,
+            complaint_type
+        )
+
+        detailed_report = generate_detailed_report(
+            meter_data,
+            error_value,
+            ranked,
+            complaint_type
+        )
+
+        st.success(
+            "Investigation Completed"
+        )
+
         st.divider()
 
-        st.subheader("Technical Findings")
+        st.header("Technical Findings")
 
         for item in findings:
-
             st.write("✅", item)
 
         st.divider()
 
-        st.subheader("Root Cause Probability")
+        st.header("Root Cause Probability")
 
-        for cause, probability in ranked:
+        for cause, prob in ranked:
 
             st.write(
-                f"**{cause}** : {probability}%"
+                f"**{cause}: {prob}%**"
             )
 
-            st.progress(probability / 100)
+            st.progress(
+                prob / 100
+            )
 
         st.divider()
 
-        st.subheader("Recommendations")
+        st.header("Recommended Actions")
 
         for item in recommendations:
 
@@ -680,29 +852,20 @@ if st.button("🔍 Analyze Meter", type="primary"):
 
         st.divider()
 
-        st.subheader(
+        st.header(
             "Customer Anticipation Response"
         )
 
-        st.info(customer_response)
+        st.info(
+            customer_response
+        )
 
         st.divider()
 
-        st.subheader("OCR Output")
+        st.header(
+            "Full Engineering Assessment"
+        )
 
-        st.text(actual_text)
-
-        st.subheader("Accuracy OCR")
-
-        st.text(error_text)
-
-        st.divider()
-
-        st.subheader("Parsed Data")
-
-        st.json(meter_data)
-
-        st.write(
-            "Accuracy Error:",
-            error_value
+        st.markdown(
+            detailed_report
         )
