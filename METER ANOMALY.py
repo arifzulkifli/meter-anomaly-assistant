@@ -71,7 +71,16 @@ with col2:
             "Others"
         ]
     )
-
+    complaint_type = st.selectbox(
+        "Customer Complaint",
+        [
+            "High Bill",
+            "Meter Fault",
+            "Low Consumption",
+            "Intermittent Supply",
+            "Routine Testing"
+        ]
+    )
 # =====================================
 # IMAGE UPLOAD
 # =====================================
@@ -205,27 +214,27 @@ def analyze_meter(
     data,
     error_value,
     meter_class,
-    meter_type
+    meter_type,
+    complaint_type
 ):
 
     findings = []
-    causes = []
     recommendations = []
-    likely_faults = []
-
-    tolerance = {
-        "0.2S": 0.2,
-        "0.5S": 0.5,
-        "1.0": 1.0,
-        "2.0": 2.0
+    scores = {
+        "Meter Internal Fault": 10,
+        "CT Polarity Reversed": 10,
+        "Wrong Phase Association": 10,
+        "Low Power Factor Load": 10,
+        "Customer Load Increase": 10,
+        "Installation Wiring Issue": 10,
+        "Test Set Error": 10
     }
 
-    limit = tolerance.get(
-        meter_class,
-        1.0
-    )
+    pf1 = data.get("pf1")
+    pf2 = data.get("pf2")
+    pf3 = data.get("pf3")
 
-    negative_pf_count = 0
+    freq = data.get("freq")
 
     # -------------------------
     # Accuracy
@@ -233,351 +242,208 @@ def analyze_meter(
 
     if error_value is not None:
 
-        if abs(error_value) > limit:
+        if abs(error_value) <= 0.5:
 
             findings.append(
-                f"Accuracy outside Class {meter_class} tolerance ({error_value}%)"
+                f"Meter accuracy acceptable ({error_value:.2f}%)"
             )
 
-            if error_value < 0:
+            scores["Meter Internal Fault"] -= 20
 
-                causes.append(
-                    "Meter under-registration detected"
+        elif abs(error_value) <= 1:
+
+            findings.append(
+                f"Meter accuracy marginal ({error_value:.2f}%)"
+            )
+
+            scores["Meter Internal Fault"] += 20
+
+        else:
+
+            findings.append(
+                f"Meter accuracy outside tolerance ({error_value:.2f}%)"
+            )
+
+            scores["Meter Internal Fault"] += 70
+
+    # -------------------------
+    # Power Factor
+    # -------------------------
+
+    negative_pf = 0
+
+    for pf_name, value in {
+        "PF1": pf1,
+        "PF2": pf2,
+        "PF3": pf3
+    }.items():
+
+        if value is not None:
+
+            if value < 0:
+
+                negative_pf += 1
+
+                findings.append(
+                    f"{pf_name} negative ({value})"
                 )
 
-            else:
-
-                causes.append(
-                    "Meter over-registration detected"
-                )
-
-            recommendations.append(
-                "Perform repeat accuracy verification"
-            )
-
-            likely_faults.append(
-                ("Accuracy Drift", 85)
-            )
+                scores["CT Polarity Reversed"] += 35
 
     # -------------------------
-    # Voltage Imbalance
+    # PF Spread
     # -------------------------
 
-    voltages = []
+    pf_values = []
 
-    for phase in ["u1", "u2", "u3"]:
+    for x in [pf1, pf2, pf3]:
 
-        if phase in data:
+        if x is not None:
+            pf_values.append(x)
 
-            voltages.append(
-                data[phase]
-            )
+    if len(pf_values) == 3:
 
-    if len(voltages) == 3:
+        spread = max(pf_values) - min(pf_values)
 
-        avg_v = sum(voltages) / 3
-
-        v_imb = (
-            max(voltages) - min(voltages)
-        ) / avg_v * 100
-
-        if v_imb > 5:
+        if spread > 0.30:
 
             findings.append(
-                f"Voltage imbalance ({v_imb:.2f}%)"
+                f"Large PF variation ({spread:.3f})"
             )
 
-            causes.append(
-                "Phase imbalance"
-            )
+            scores["Wrong Phase Association"] += 40
+            scores["Installation Wiring Issue"] += 20
 
-            recommendations.append(
-                "Check supply voltage"
-            )
+        avg_pf = sum([
+            abs(x)
+            for x in pf_values
+        ]) / 3
 
-    # -------------------------
-    # Current Imbalance
-    # -------------------------
-
-    currents = []
-
-    for phase in ["i1", "i2", "i3"]:
-
-        if phase in data:
-
-            currents.append(
-                data[phase]
-            )
-
-    if len(currents) == 3:
-
-        avg_i = sum(currents) / 3
-
-        i_imb = (
-            max(currents) - min(currents)
-        ) / avg_i * 100
-
-        if i_imb > 10:
+        if avg_pf < 0.85:
 
             findings.append(
-                f"Current imbalance ({i_imb:.2f}%)"
+                f"PF below ESAH reference ({avg_pf:.3f})"
             )
 
-            causes.append(
-                "Uneven loading or CT issue"
-            )
-
-            recommendations.append(
-                "Verify CT and loading"
-            )
-
-    # -------------------------
-    # PF Analysis
-    # -------------------------
-
-    for pf in ["pf1", "pf2", "pf3"]:
-
-        value = data.get(pf)
-
-        if value is not None and value < 0:
-
-            negative_pf_count += 1
-
-            findings.append(
-                f"Negative power factor detected on {pf.upper()} ({value})"
-            )
-
-    if negative_pf_count > 0:
-
-        causes.append(
-            "Possible CT polarity reversal"
-        )
-
-        causes.append(
-            "Possible metering wiring issue"
-        )
-
-        recommendations.append(
-            "Verify CT polarity"
-        )
-
-        recommendations.append(
-            "Verify meter terminal wiring"
-        )
-
-        likely_faults.append(
-            ("CT Polarity Reversal", 90)
-        )
-
-        likely_faults.append(
-            ("Wiring Configuration Error", 75)
-        )
-
-    # -------------------------
-    # CT Meter Logic
-    # -------------------------
-
-    if meter_type == "3 Phase CT":
-
-        if negative_pf_count > 0:
-
-            findings.append(
-                "CT metering anomaly suspected"
-            )
-
-            recommendations.append(
-                "Perform CT polarity test"
-            )
+            scores["Low Power Factor Load"] += 30
 
     # -------------------------
     # Frequency
     # -------------------------
-
-    freq = data.get("freq")
 
     if freq is not None:
 
         if freq < 49 or freq > 51:
 
             findings.append(
-                f"Abnormal frequency ({freq}Hz)"
+                f"Abnormal Frequency ({freq}Hz)"
             )
 
-            causes.append(
-                "Supply frequency issue"
-            )
+            scores["Test Set Error"] += 10
 
     # -------------------------
-    # If no anomaly
+    # High Bill Logic
     # -------------------------
 
-    if len(findings) == 0:
+    if complaint_type == "High Bill":
 
-        findings.append(
-            "No major anomaly detected"
+        scores["Customer Load Increase"] += 35
+
+        if error_value is not None:
+
+            if abs(error_value) <= 0.5:
+
+                scores["Customer Load Increase"] += 20
+                scores["Meter Internal Fault"] -= 10
+
+    # -------------------------
+    # Probability
+    # -------------------------
+
+    scores = {
+        k:max(v,0)
+        for k,v in scores.items()
+    }
+
+    total = sum(scores.values())
+
+    ranked = []
+
+    for cause,value in scores.items():
+
+        percentage = round(
+            value / total * 100,
+            1
         )
 
-    return (
-        findings,
-        causes,
-        recommendations,
-        likely_faults
+        ranked.append(
+            (
+                cause,
+                percentage
+            )
+        )
+
+    ranked.sort(
+        key=lambda x:x[1],
+        reverse=True
     )
-# =====================================
-# RUN ANALYSIS
-# =====================================
 
-if st.button("Analyze Meter"):
+    # -------------------------
+    # Customer Explanation
+    # -------------------------
 
-    if not actual_img or not error_img:
+    if error_value is not None and abs(error_value) <= 0.5:
 
-        st.warning(
-            "Please upload both images."
-        )
+        customer_response = f"""
+Meter accuracy test recorded {error_value:.2f}% deviation.
+
+This result is within acceptable limits and does not indicate meter over-registration.
+
+Abnormal power factor conditions were detected during testing.
+
+Low power factor may be caused by customer electrical equipment, wiring conditions, phase association issues, CT polarity issues or installation conditions.
+
+Current evidence suggests further verification should focus on installation and load characteristics before concluding that the meter is faulty.
+"""
 
     else:
 
-        with st.spinner(
-            "Analyzing..."
-        ):
+        customer_response = """
+Additional verification required before final conclusion.
+"""
 
-            actual_text = read_image(
-                actual_img
-            )
+    recommendations = []
 
-            error_text = read_image(
-                error_img
-            )
+    top_cause = ranked[0][0]
 
-            meter_data = parse_meter_values(
-                actual_text
-            )
+    if top_cause == "CT Polarity Reversed":
 
-            error_value = extract_error(
-                error_text
-            )
+        recommendations.extend([
+            "Verify CT S1/S2 polarity",
+            "Verify current lead orientation",
+            "Repeat vector diagram test"
+        ])
 
-            findings, causes, recommendations, likely_faults = analyze_meter(
-                meter_data,
-                error_value,
-                meter_class,
-                meter_type
-            )
+    elif top_cause == "Wrong Phase Association":
 
-        st.success(
-            "Analysis Completed"
-        )
+        recommendations.extend([
+            "Verify phase sequence",
+            "Verify V-I pairing",
+            "Repeat phase angle verification"
+        ])
 
-        tab1, tab2, tab3 = st.tabs(
-            [
-                "Assessment",
-                "OCR Output",
-                "Raw Data"
-            ]
-        )
+    elif top_cause == "Low Power Factor Load":
 
-        with tab1:
+        recommendations.extend([
+            "Inspect motors",
+            "Inspect compressors",
+            "Inspect welding equipment",
+            "Evaluate capacitor bank performance"
+        ])
 
-            st.header(
-                "Meter Assessment"
-            )
-
-            st.write(
-                f"Installation: {installation}"
-            )
-
-            st.write(
-                f"Meter Serial: {meter_serial}"
-            )
-
-            st.write(
-                f"Meter Type: {meter_type}"
-            )
-
-            st.write(
-                f"Meter Class: {meter_class}"
-            )
-
-            st.write(
-                f"Manufacturer: {manufacturer}"
-            )
-
-            st.divider()
-
-            st.subheader(
-                "Findings"
-            )
-
-            for item in findings:
-
-                st.write(
-                    "✅",
-                    item
-                )
-
-            st.subheader(
-                "Possible Causes"
-            )
-
-            for item in causes:
-
-                st.write(
-                    "•",
-                    item
-                )
-
-            st.subheader(
-                "Recommendations"
-            )
-            st.subheader(
-                "Likely Faults"
-            )
-
-            for fault, confidence in likely_faults:
-
-                st.write(
-                    f"⚠️ {fault} ({confidence}% confidence)"
-                )
-            for item in recommendations:
-
-                st.write(
-                    "🔧",
-                    item
-                )
-
-        with tab2:
-
-            st.subheader(
-                "Actual Screen OCR"
-            )
-
-            st.text(
-                actual_text
-            )
-
-            st.subheader(
-                "Accuracy Screen OCR"
-            )
-
-            st.text(
-                error_text
-            )
-
-        with tab3:
-
-            st.subheader("Parsed Meter Data")
-            st.json(meter_data)
-
-            st.subheader("Parsed Error")
-            st.write(error_value)
-
-            st.subheader("OCR Actual Text")
-            st.text(actual_text)
-
-            st.subheader("OCR Error Text")
-            st.text(error_text)
-
-            st.write(
-                "Error %",
-                error_value
-            )
+    return (
+        findings,
+        ranked,
+        recommendations,
+        customer_response
+    )
