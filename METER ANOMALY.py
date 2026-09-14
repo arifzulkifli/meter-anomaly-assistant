@@ -119,26 +119,25 @@ def read_image(uploaded_file):
 
 def extract_error(text):
 
-    patterns = [
-        r'(-?\d+\.\d+)\s*%',
-        r'(-?\d+,\d+)\s*%'
-    ]
+    text = text.replace(",", ".")
 
-    for pattern in patterns:
+    matches = re.findall(
+        r'-?\d+\.\d+\s*%',
+        text
+    )
 
-        match = re.search(
-            pattern,
-            text,
-            re.IGNORECASE
-        )
+    if matches:
 
-        if match:
+        try:
 
-            value = match.group(1)
+            return float(
+                matches[0]
+                .replace("%", "")
+                .strip()
+            )
 
-            value = value.replace(",", ".")
-
-            return float(value)
+        except:
+            pass
 
     return None
 
@@ -153,19 +152,17 @@ def parse_meter_values(text):
     text = text.replace("\n", " ")
 
     patterns = {
-        "u1": r"U1[: ]+([0-9]+\.[0-9]+)",
-        "u2": r"U2[: ]+([0-9]+\.[0-9]+)",
-        "u3": r"U3[: ]+([0-9]+\.[0-9]+)",
+        "u1": r"U1[: ]*([0-9]+\.?[0-9]*)",
+        "u2": r"U2[: ]*([0-9]+\.?[0-9]*)",
+        "u3": r"U3[: ]*([0-9]+\.?[0-9]*)",
 
-        "i1": r"I1[: ]+([0-9]+\.[0-9]+)",
-        "i2": r"I2[: ]+([0-9]+\.[0-9]+)",
-        "i3": r"I3[: ]+([0-9]+\.[0-9]+)",
+        "i1": r"I1[: ]*([0-9]+\.?[0-9]*)",
+        "i2": r"I2[: ]*([0-9]+\.?[0-9]*)",
+        "i3": r"I3[: ]*([0-9]+\.?[0-9]*)",
 
-        "pf1": r"PF1[: ]+(-?[0-9]+\.[0-9]+)",
-        "pf2": r"PF2[: ]+(-?[0-9]+\.[0-9]+)",
-        "pf3": r"PF3[: ]+(-?[0-9]+\.[0-9]+)",
-
-        "freq": r"f[: ]+([0-9]+\.[0-9]+)"
+        "pf1": r"PF1[: ]*(-?[0-9]+\.?[0-9]*)",
+        "pf2": r"PF2[: ]*(-?[0-9]+\.?[0-9]*)",
+        "pf3": r"PF3[: ]*(-?[0-9]+\.?[0-9]*)",
     }
 
     for key, pattern in patterns.items():
@@ -178,9 +175,22 @@ def parse_meter_values(text):
 
         if match:
 
-            data[key] = float(match.group(1))
+            try:
+                data[key] = float(match.group(1))
+            except:
+                pass
 
-    return data
+    freq_match = re.search(
+        r'([4-6][0-9]\.[0-9]+)\s*Hz',
+        text,
+        re.IGNORECASE
+    )
+
+    if freq_match:
+
+        data["freq"] = float(
+            freq_match.group(1)
+        )
 
 # =====================================
 # ANALYSIS ENGINE
@@ -189,12 +199,14 @@ def parse_meter_values(text):
 def analyze_meter(
     data,
     error_value,
-    meter_class
+    meter_class,
+    meter_type
 ):
 
     findings = []
     causes = []
     recommendations = []
+    likely_faults = []
 
     tolerance = {
         "0.2S": 0.2,
@@ -208,6 +220,8 @@ def analyze_meter(
         1.0
     )
 
+    negative_pf_count = 0
+
     # -------------------------
     # Accuracy
     # -------------------------
@@ -217,59 +231,27 @@ def analyze_meter(
         if abs(error_value) > limit:
 
             findings.append(
-                f"Accuracy outside tolerance ({error_value}%)"
+                f"Accuracy outside Class {meter_class} tolerance ({error_value}%)"
             )
 
-            causes.append(
-                "Meter accuracy drift"
-            )
+            if error_value < 0:
+
+                causes.append(
+                    "Meter under-registration detected"
+                )
+
+            else:
+
+                causes.append(
+                    "Meter over-registration detected"
+                )
 
             recommendations.append(
-                "Perform meter verification test"
+                "Perform repeat accuracy verification"
             )
 
-    # -------------------------
-    # Missing Voltage
-    # -------------------------
-
-    for phase in ["u1", "u2", "u3"]:
-
-        value = data.get(phase)
-
-        if value is not None and value < 50:
-
-            findings.append(
-                f"{phase.upper()} voltage missing"
-            )
-
-            causes.append(
-                "Loose connection / open circuit / missing phase"
-            )
-
-            recommendations.append(
-                "Inspect voltage circuit"
-            )
-
-    # -------------------------
-    # Missing Current
-    # -------------------------
-
-    for phase in ["i1", "i2", "i3"]:
-
-        value = data.get(phase)
-
-        if value is not None and value < 0.1:
-
-            findings.append(
-                f"{phase.upper()} current abnormally low"
-            )
-
-            causes.append(
-                "Open CT circuit or wiring issue"
-            )
-
-            recommendations.append(
-                "Inspect CT secondary wiring"
+            likely_faults.append(
+                ("Accuracy Drift", 85)
             )
 
     # -------------------------
@@ -291,8 +273,7 @@ def analyze_meter(
         avg_v = sum(voltages) / 3
 
         v_imb = (
-            max(voltages)
-            - min(voltages)
+            max(voltages) - min(voltages)
         ) / avg_v * 100
 
         if v_imb > 5:
@@ -328,8 +309,7 @@ def analyze_meter(
         avg_i = sum(currents) / 3
 
         i_imb = (
-            max(currents)
-            - min(currents)
+            max(currents) - min(currents)
         ) / avg_i * 100
 
         if i_imb > 10:
@@ -350,29 +330,59 @@ def analyze_meter(
     # PF Analysis
     # -------------------------
 
-    for pf in [
-        "pf1",
-        "pf2",
-        "pf3"
-    ]:
+    for pf in ["pf1", "pf2", "pf3"]:
 
         value = data.get(pf)
 
-        if value is not None:
+        if value is not None and value < 0:
 
-            if value < 0:
+            negative_pf_count += 1
 
-                findings.append(
-                    f"Negative Power Factor at {pf.upper()}"
-                )
+            findings.append(
+                f"Negative power factor detected on {pf.upper()} ({value})"
+            )
 
-                causes.append(
-                    "Possible CT polarity reversal"
-                )
+    if negative_pf_count > 0:
 
-                recommendations.append(
-                    "Check CT polarity"
-                )
+        causes.append(
+            "Possible CT polarity reversal"
+        )
+
+        causes.append(
+            "Possible metering wiring issue"
+        )
+
+        recommendations.append(
+            "Verify CT polarity"
+        )
+
+        recommendations.append(
+            "Verify meter terminal wiring"
+        )
+
+        likely_faults.append(
+            ("CT Polarity Reversal", 90)
+        )
+
+        likely_faults.append(
+            ("Wiring Configuration Error", 75)
+        )
+
+    # -------------------------
+    # CT Meter Logic
+    # -------------------------
+
+    if meter_type == "3 Phase CT":
+
+        if negative_pf_count > 0:
+
+            findings.append(
+                "CT metering anomaly suspected"
+            )
+
+            recommendations.append(
+                "Perform CT polarity test"
+            )
 
     # -------------------------
     # Frequency
@@ -405,9 +415,9 @@ def analyze_meter(
     return (
         findings,
         causes,
-        recommendations
+        recommendations,
+        likely_faults
     )
-
 # =====================================
 # RUN ANALYSIS
 # =====================================
@@ -442,10 +452,11 @@ if st.button("Analyze Meter"):
                 error_text
             )
 
-            findings, causes, recommendations = analyze_meter(
+            findings, causes, recommendations, likely_faults = analyze_meter(
                 meter_data,
                 error_value,
-                meter_class
+                meter_class,
+                meter_type
             )
 
         st.success(
@@ -513,7 +524,15 @@ if st.button("Analyze Meter"):
             st.subheader(
                 "Recommendations"
             )
+            st.subheader(
+                "Likely Faults"
+            )
 
+            for fault, confidence in likely_faults:
+
+                st.write(
+                    f"⚠️ {fault} ({confidence}% confidence)"
+                )
             for item in recommendations:
 
                 st.write(
@@ -541,9 +560,17 @@ if st.button("Analyze Meter"):
 
         with tab3:
 
-            st.json(
-                meter_data
-            )
+            st.subheader("Parsed Meter Data")
+            st.json(meter_data)
+
+            st.subheader("Parsed Error")
+            st.write(error_value)
+
+            st.subheader("OCR Actual Text")
+            st.text(actual_text)
+
+            st.subheader("OCR Error Text")
+            st.text(error_text)
 
             st.write(
                 "Error %",
