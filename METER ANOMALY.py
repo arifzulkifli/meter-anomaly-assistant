@@ -448,6 +448,174 @@ Additional verification required before final conclusion.
         customer_response
     )
 # =====================================
+# DETAILED ENGINEERING REPORT
+# =====================================
+
+def generate_detailed_report(
+    meter_data,
+    error_value,
+    ranked,
+    complaint_type
+):
+
+    u1 = meter_data.get("u1","N/A")
+    u2 = meter_data.get("u2","N/A")
+    u3 = meter_data.get("u3","N/A")
+
+    i1 = meter_data.get("i1","N/A")
+    i2 = meter_data.get("i2","N/A")
+    i3 = meter_data.get("i3","N/A")
+
+    pf1 = meter_data.get("pf1","N/A")
+    pf2 = meter_data.get("pf2","N/A")
+    pf3 = meter_data.get("pf3","N/A")
+
+    freq = meter_data.get("freq","N/A")
+
+    report = f"""
+# Site Technical Assessment
+
+## Meter Accuracy
+
+Accuracy Result:
+
+{error_value} %
+
+"""
+
+    if error_value is not None:
+
+        if abs(error_value) <= 0.5:
+
+            report += """
+Meter accuracy remains within acceptable tolerance.
+
+Current evidence does not indicate meter over-registration.
+
+"""
+
+        else:
+
+            report += """
+Meter accuracy requires further investigation.
+
+Potential metering error cannot be ruled out.
+
+"""
+
+    report += f"""
+
+## Voltage Analysis
+
+U1 = {u1} V
+U2 = {u2} V
+U3 = {u3} V
+
+Voltage profile appears relatively balanced.
+
+## Current Analysis
+
+I1 = {i1}
+I2 = {i2}
+I3 = {i3}
+
+Current profile appears relatively balanced.
+
+## Power Factor Analysis
+
+PF1 = {pf1}
+PF2 = {pf2}
+PF3 = {pf3}
+
+"""
+
+    if isinstance(pf3,(float,int)) and pf3 < 0:
+
+        report += """
+Negative power factor detected.
+
+Possible causes:
+
+• CT polarity reversal
+• Wrong phase-current pairing
+• Incorrect test lead connection
+• Wiring anomaly
+
+"""
+
+    report += f"""
+
+## Frequency
+
+Frequency Recorded:
+
+{freq} Hz
+
+"""
+
+    if ranked:
+
+        report += """
+
+## Root Cause Probability
+
+"""
+
+        for cause, prob in ranked:
+
+            report += f"""
+• {cause} : {prob}%
+"""
+
+    report += f"""
+
+## Customer Complaint Assessment
+
+Complaint Type:
+
+{complaint_type}
+
+"""
+
+    if complaint_type == "High Bill":
+
+        report += """
+
+Current evidence suggests the meter is measuring within tolerance (where accuracy is acceptable).
+
+Investigation should focus on:
+
+• Additional customer load
+• Air conditioning usage
+• Water heaters
+• Industrial equipment
+• Low power factor equipment
+• Installation wiring condition
+
+"""
+
+    report += """
+
+## Likely Customer Question
+
+"Is my meter faulty because the power factor is low?"
+
+## Suggested Technician Response
+
+The power factor readings indicate abnormal operating conditions.
+
+However, the meter accuracy verification should be considered separately.
+
+Where accuracy remains within allowable tolerance, there is currently insufficient evidence to conclude that the meter is over-registering energy consumption.
+
+The abnormal power factor may instead be associated with wiring conditions, CT polarity, phase-current relationship, connected equipment characteristics or installation issues.
+
+Further investigation is recommended before concluding that the meter is faulty.
+
+"""
+
+    return report
+# =====================================
 # RUN ANALYSIS
 # =====================================
 
