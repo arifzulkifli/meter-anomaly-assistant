@@ -126,30 +126,71 @@ def read_image(uploaded_file):
 # PARSE ERROR %
 # =====================================
 
-def extract_error(text):
+def parse_meter_values(text):
+
+    data = {}
+
+    if not text:
+        return data
+
+    text = text.upper()
 
     text = text.replace(",", ".")
 
-    matches = re.findall(
-        r'-?\d+\.\d+\s*%',
+    # Common OCR corrections
+
+    text = text.replace("UL", "U1")
+    text = text.replace("PFI", "PF1")
+    text = text.replace("II", "I1")
+
+    patterns = {
+
+        "u1": r"U1\s*([0-9]+\.[0-9]+)",
+        "u2": r"U2\s*([0-9]+\.[0-9]+)",
+        "u3": r"U3\s*([0-9]+\.[0-9]+)",
+
+        "i1": r"I1\s*([0-9]+\.[0-9]+)",
+        "i2": r"I2\s*([0-9]+\.[0-9]+)",
+        "i3": r"I3\s*([0-9]+\.[0-9]+)",
+
+        "pf1": r"PF1\s*(-?[0-9]+\.[0-9]+)",
+        "pf2": r"PF2\s*(-?[0-9]+\.[0-9]+)",
+        "pf3": r"PF3\s*(-?[0-9]+\.[0-9]+)"
+    }
+
+    for key, pattern in patterns.items():
+
+        match = re.search(pattern, text)
+
+        if match:
+
+            try:
+                data[key] = float(
+                    match.group(1)
+                )
+
+            except:
+                pass
+
+    # Frequency
+
+    freq_match = re.search(
+        r"([4-6][0-9]\.[0-9]+)\s*HZ",
         text
     )
 
-    if matches:
+    if freq_match:
 
         try:
 
-            return float(
-                matches[0]
-                .replace("%", "")
-                .strip()
+            data["freq"] = float(
+                freq_match.group(1)
             )
 
         except:
             pass
 
-    return None
-
+    return data
 # =====================================
 # METER VALUE PARSER
 # =====================================
