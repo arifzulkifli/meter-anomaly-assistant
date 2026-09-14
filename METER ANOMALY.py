@@ -149,6 +149,9 @@ def parse_meter_values(text):
 
     data = {}
 
+    if text is None:
+        return {}
+
     text = text.replace("\n", " ")
 
     patterns = {
@@ -191,6 +194,8 @@ def parse_meter_values(text):
         data["freq"] = float(
             freq_match.group(1)
         )
+
+    return data
 
 # =====================================
 # ANALYSIS ENGINE
