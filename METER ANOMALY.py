@@ -2,31 +2,43 @@ import streamlit as st
 import easyocr
 import cv2
 import numpy as np
-import pandas as pd
 from PIL import Image
 import re
 
-# ==========================
-# PAGE SETTINGS
-# ==========================
+# =====================================
+# PAGE CONFIG
+# =====================================
 
 st.set_page_config(
-    page_title="Meter Test Assistant",
+    page_title="Meter Fault Assistant",
     layout="wide"
 )
 
-st.title("⚡ Meter Test Assistant MVP")
+st.title("⚡ Meter Fault Assistant")
 
-# ==========================
+# =====================================
+# CACHE OCR
+# =====================================
+
+@st.cache_resource
+def load_reader():
+    return easyocr.Reader(['en'], gpu=False)
+
+# =====================================
 # USER INPUTS
-# ==========================
+# =====================================
 
 col1, col2 = st.columns(2)
 
 with col1:
-    installation = st.text_input("Installation Number")
 
-    meter_serial = st.text_input("Meter Serial Number")
+    installation = st.text_input(
+        "Installation Number"
+    )
+
+    meter_serial = st.text_input(
+        "Meter Serial Number"
+    )
 
     meter_type = st.selectbox(
         "Meter Type",
@@ -60,123 +72,385 @@ with col2:
         ]
     )
 
-# ==========================
-# FILE UPLOAD
-# ==========================
+# =====================================
+# IMAGE UPLOAD
+# =====================================
 
 actual_img = st.file_uploader(
     "Upload Actual Values Screen",
-    type=["jpg", "jpeg", "png"]
+    type=["png", "jpg", "jpeg"]
 )
 
 error_img = st.file_uploader(
-    "Upload Error Measurement Screen",
-    type=["jpg", "jpeg", "png"]
+    "Upload Accuracy Screen",
+    type=["png", "jpg", "jpeg"]
 )
 
-# ==========================
-# OCR
-# ==========================
-
-reader = easyocr.Reader(['en'], gpu=False)
-
+# =====================================
+# OCR FUNCTION
+# =====================================
 
 def read_image(uploaded_file):
+
+    reader = load_reader()
+
     image = Image.open(uploaded_file)
-    image_np = np.array(image)
 
-    gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+    img_np = np.array(image)
 
-    results = reader.readtext(gray)
+    gray = cv2.cvtColor(
+        img_np,
+        cv2.COLOR_RGB2GRAY
+    )
 
-    extracted = []
+    result = reader.readtext(gray)
 
-    for item in results:
-        extracted.append(item[1])
+    texts = []
 
-    return "\n".join(extracted)
+    for item in result:
 
+        texts.append(item[1])
+
+    return "\n".join(texts)
+
+# =====================================
+# PARSE ERROR %
+# =====================================
 
 def extract_error(text):
 
-    match = re.search(r'(-?\d+\.\d+)\s*%', text)
+    patterns = [
+        r'(-?\d+\.\d+)\s*%',
+        r'(-?\d+,\d+)\s*%'
+    ]
 
-    if match:
-        return float(match.group(1))
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            value = match.group(1)
+
+            value = value.replace(",", ".")
+
+            return float(value)
 
     return None
 
+# =====================================
+# METER VALUE PARSER
+# =====================================
 
-# ==========================
-# ANOMALY ENGINE
-# ==========================
+def parse_meter_values(text):
 
-def analyze(error_value):
+    data = {}
+
+    text = text.replace("\n", " ")
+
+    patterns = {
+        "u1": r"U1[: ]+([0-9]+\.[0-9]+)",
+        "u2": r"U2[: ]+([0-9]+\.[0-9]+)",
+        "u3": r"U3[: ]+([0-9]+\.[0-9]+)",
+
+        "i1": r"I1[: ]+([0-9]+\.[0-9]+)",
+        "i2": r"I2[: ]+([0-9]+\.[0-9]+)",
+        "i3": r"I3[: ]+([0-9]+\.[0-9]+)",
+
+        "pf1": r"PF1[: ]+(-?[0-9]+\.[0-9]+)",
+        "pf2": r"PF2[: ]+(-?[0-9]+\.[0-9]+)",
+        "pf3": r"PF3[: ]+(-?[0-9]+\.[0-9]+)",
+
+        "freq": r"f[: ]+([0-9]+\.[0-9]+)"
+    }
+
+    for key, pattern in patterns.items():
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            data[key] = float(match.group(1))
+
+    return data
+
+# =====================================
+# ANALYSIS ENGINE
+# =====================================
+
+def analyze_meter(
+    data,
+    error_value,
+    meter_class
+):
 
     findings = []
     causes = []
+    recommendations = []
 
-    tolerance_map = {
+    tolerance = {
         "0.2S": 0.2,
         "0.5S": 0.5,
         "1.0": 1.0,
         "2.0": 2.0
     }
 
-    limit = tolerance_map[meter_class]
+    limit = tolerance.get(
+        meter_class,
+        1.0
+    )
+
+    # -------------------------
+    # Accuracy
+    # -------------------------
 
     if error_value is not None:
 
-        if error_value < -limit:
+        if abs(error_value) > limit:
 
             findings.append(
-                f"Meter Under Registration ({error_value}%)"
+                f"Accuracy outside tolerance ({error_value}%)"
             )
 
-            causes.extend([
-                "Meter drift",
-                "Voltage circuit issue",
-                "Current circuit issue"
-            ])
+            causes.append(
+                "Meter accuracy drift"
+            )
 
-        elif error_value > limit:
+            recommendations.append(
+                "Perform meter verification test"
+            )
+
+    # -------------------------
+    # Missing Voltage
+    # -------------------------
+
+    for phase in ["u1", "u2", "u3"]:
+
+        value = data.get(phase)
+
+        if value is not None and value < 50:
 
             findings.append(
-                f"Meter Over Registration ({error_value}%)"
+                f"{phase.upper()} voltage missing"
             )
 
-            causes.extend([
-                "Meter calibration issue",
-                "Incorrect wiring"
-            ])
+            causes.append(
+                "Loose connection / open circuit / missing phase"
+            )
 
-        else:
+            recommendations.append(
+                "Inspect voltage circuit"
+            )
+
+    # -------------------------
+    # Missing Current
+    # -------------------------
+
+    for phase in ["i1", "i2", "i3"]:
+
+        value = data.get(phase)
+
+        if value is not None and value < 0.1:
 
             findings.append(
-                f"Meter Accuracy Within Limit ({error_value}%)"
+                f"{phase.upper()} current abnormally low"
             )
 
-    return findings, causes
+            causes.append(
+                "Open CT circuit or wiring issue"
+            )
 
+            recommendations.append(
+                "Inspect CT secondary wiring"
+            )
 
-# ==========================
+    # -------------------------
+    # Voltage Imbalance
+    # -------------------------
+
+    voltages = []
+
+    for phase in ["u1", "u2", "u3"]:
+
+        if phase in data:
+
+            voltages.append(
+                data[phase]
+            )
+
+    if len(voltages) == 3:
+
+        avg_v = sum(voltages) / 3
+
+        v_imb = (
+            max(voltages)
+            - min(voltages)
+        ) / avg_v * 100
+
+        if v_imb > 5:
+
+            findings.append(
+                f"Voltage imbalance ({v_imb:.2f}%)"
+            )
+
+            causes.append(
+                "Phase imbalance"
+            )
+
+            recommendations.append(
+                "Check supply voltage"
+            )
+
+    # -------------------------
+    # Current Imbalance
+    # -------------------------
+
+    currents = []
+
+    for phase in ["i1", "i2", "i3"]:
+
+        if phase in data:
+
+            currents.append(
+                data[phase]
+            )
+
+    if len(currents) == 3:
+
+        avg_i = sum(currents) / 3
+
+        i_imb = (
+            max(currents)
+            - min(currents)
+        ) / avg_i * 100
+
+        if i_imb > 10:
+
+            findings.append(
+                f"Current imbalance ({i_imb:.2f}%)"
+            )
+
+            causes.append(
+                "Uneven loading or CT issue"
+            )
+
+            recommendations.append(
+                "Verify CT and loading"
+            )
+
+    # -------------------------
+    # PF Analysis
+    # -------------------------
+
+    for pf in [
+        "pf1",
+        "pf2",
+        "pf3"
+    ]:
+
+        value = data.get(pf)
+
+        if value is not None:
+
+            if value < 0:
+
+                findings.append(
+                    f"Negative Power Factor at {pf.upper()}"
+                )
+
+                causes.append(
+                    "Possible CT polarity reversal"
+                )
+
+                recommendations.append(
+                    "Check CT polarity"
+                )
+
+    # -------------------------
+    # Frequency
+    # -------------------------
+
+    freq = data.get("freq")
+
+    if freq is not None:
+
+        if freq < 49 or freq > 51:
+
+            findings.append(
+                f"Abnormal frequency ({freq}Hz)"
+            )
+
+            causes.append(
+                "Supply frequency issue"
+            )
+
+    # -------------------------
+    # If no anomaly
+    # -------------------------
+
+    if len(findings) == 0:
+
+        findings.append(
+            "No major anomaly detected"
+        )
+
+    return (
+        findings,
+        causes,
+        recommendations
+    )
+
+# =====================================
 # RUN ANALYSIS
-# ==========================
+# =====================================
 
 if st.button("Analyze Meter"):
 
-    if actual_img and error_img:
+    if not actual_img or not error_img:
 
-        with st.spinner("Running OCR..."):
+        st.warning(
+            "Please upload both images."
+        )
 
-            text1 = read_image(actual_img)
-            text2 = read_image(error_img)
+    else:
 
-            error_value = extract_error(text2)
+        with st.spinner(
+            "Analyzing..."
+        ):
 
-            findings, causes = analyze(error_value)
+            actual_text = read_image(
+                actual_img
+            )
 
-        st.success("Analysis Completed")
+            error_text = read_image(
+                error_img
+            )
+
+            meter_data = parse_meter_values(
+                actual_text
+            )
+
+            error_value = extract_error(
+                error_text
+            )
+
+            findings, causes, recommendations = analyze_meter(
+                meter_data,
+                error_value,
+                meter_class
+            )
+
+        st.success(
+            "Analysis Completed"
+        )
 
         tab1, tab2, tab3 = st.tabs(
             [
@@ -188,7 +462,9 @@ if st.button("Analyze Meter"):
 
         with tab1:
 
-            st.subheader("Meter Assessment")
+            st.header(
+                "Meter Assessment"
+            )
 
             st.write(
                 f"Installation: {installation}"
@@ -210,41 +486,66 @@ if st.button("Analyze Meter"):
                 f"Manufacturer: {manufacturer}"
             )
 
-            st.write("---")
+            st.divider()
 
-            st.subheader("Findings")
+            st.subheader(
+                "Findings"
+            )
 
-            for f in findings:
-                st.write("✅", f)
+            for item in findings:
 
-            st.subheader("Possible Causes")
+                st.write(
+                    "✅",
+                    item
+                )
 
-            for c in causes:
-                st.write("•", c)
+            st.subheader(
+                "Possible Causes"
+            )
+
+            for item in causes:
+
+                st.write(
+                    "•",
+                    item
+                )
+
+            st.subheader(
+                "Recommendations"
+            )
+
+            for item in recommendations:
+
+                st.write(
+                    "🔧",
+                    item
+                )
 
         with tab2:
 
-            st.subheader("Actual Values OCR")
+            st.subheader(
+                "Actual Screen OCR"
+            )
 
-            st.text(text1)
+            st.text(
+                actual_text
+            )
 
-            st.subheader("Error Screen OCR")
+            st.subheader(
+                "Accuracy Screen OCR"
+            )
 
-            st.text(text2)
+            st.text(
+                error_text
+            )
 
         with tab3:
 
-            st.write({
-                "installation": installation,
-                "meter_serial": meter_serial,
-                "meter_type": meter_type,
-                "meter_class": meter_class,
-                "manufacturer": manufacturer,
-                "error": error_value
-            })
+            st.json(
+                meter_data
+            )
 
-    else:
-
-        st.warning(
-            "Please upload both images."
-        )
+            st.write(
+                "Error %",
+                error_value
+            )
