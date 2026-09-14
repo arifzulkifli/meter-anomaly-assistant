@@ -447,3 +447,94 @@ Additional verification required before final conclusion.
         recommendations,
         customer_response
     )
+# =====================================
+# RUN ANALYSIS
+# =====================================
+
+if st.button("🔍 Analyze Meter", type="primary"):
+
+    if actual_img is None or error_img is None:
+
+        st.warning(
+            "Please upload Actual Values and Accuracy images."
+        )
+
+    else:
+
+        with st.spinner("Running OCR and Analysis..."):
+
+            actual_text = read_image(actual_img)
+            error_text = read_image(error_img)
+
+            meter_data = parse_meter_values(actual_text)
+
+            error_value = extract_error(error_text)
+
+            findings, ranked, recommendations, customer_response = analyze_meter(
+                meter_data,
+                error_value,
+                meter_class,
+                meter_type,
+                complaint_type
+            )
+
+        st.success("Analysis Completed")
+        st.divider()
+
+        st.subheader("Technical Findings")
+
+        for item in findings:
+
+            st.write("✅", item)
+
+        st.divider()
+
+        st.subheader("Root Cause Probability")
+
+        for cause, probability in ranked:
+
+            st.write(
+                f"**{cause}** : {probability}%"
+            )
+
+            st.progress(probability / 100)
+
+        st.divider()
+
+        st.subheader("Recommendations")
+
+        for item in recommendations:
+
+            st.write(
+                "🔧",
+                item
+            )
+
+        st.divider()
+
+        st.subheader(
+            "Customer Anticipation Response"
+        )
+
+        st.info(customer_response)
+
+        st.divider()
+
+        st.subheader("OCR Output")
+
+        st.text(actual_text)
+
+        st.subheader("Accuracy OCR")
+
+        st.text(error_text)
+
+        st.divider()
+
+        st.subheader("Parsed Data")
+
+        st.json(meter_data)
+
+        st.write(
+            "Accuracy Error:",
+            error_value
+        )
