@@ -98,6 +98,30 @@ error_img = st.file_uploader(
 # =====================================
 # OCR FUNCTION
 # =====================================
+def read_image(uploaded_file):
+
+    reader = load_reader()
+
+    image = Image.open(uploaded_file)
+
+    img_np = np.array(image)
+
+    gray = cv2.cvtColor(
+        img_np,
+        cv2.COLOR_RGB2GRAY
+    )
+
+    result = reader.readtext(
+        gray,
+        detail=1
+    )
+
+    texts = []
+
+    for item in result:
+        texts.append(item[1])
+
+    return "\n".join(texts)
 
 def read_accuracy_image(uploaded_file):
 
