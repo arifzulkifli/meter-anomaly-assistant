@@ -285,39 +285,27 @@ def parse_meter_values(text):
 # CURRENT
 # --------------------
 
-# OCR corrections for current labels
-
     text = text.replace("II:", "I1:")
     text = text.replace("II;", "I1:")
+    text = text.replace("II", "I1")
+
     text = text.replace("IZ:", "I2:")
     text = text.replace("IZ;", "I2:")
-    text = text.replace("II:", "I1:")
-    text = text.replace("LI:", "I1:")
-    text = text.replace("IL:", "I1:")
+    text = text.replace("IZ", "I2")
 
-    i1 = re.search(
-        r'I1[: ]*(\d+\.\d+)',
+    current_matches = re.findall(
+        r'I[123][: ]*(\d+\.\d+)',
         text
     )
 
-    i2 = re.search(
-        r'I2[: ]*(\d+\.\d+)',
-        text
-    )
+    st.write("DEBUG CURRENT:", current_matches)
 
-    i3 = re.search(
-        r'I3[: ]*(\d+\.\d+)',
-        text
-    )
+    if len(current_matches) >= 3:
 
-    if i1:
-        data["i1"] = float(i1.group(1))
+        data["i1"] = float(current_matches[0])
+        data["i2"] = float(current_matches[1])
+        data["i3"] = float(current_matches[2])
 
-    if i2:
-        data["i2"] = float(i2.group(1))
-
-    if i3:
-        data["i3"] = float(i3.group(1))
 
 
 # --------------------
@@ -363,8 +351,6 @@ def parse_meter_values(text):
         if line.strip().startswith("F:"):
 
             freq_lines.append(line)
-
-    st.write("DEBUG FREQ:", freq_lines)
 
     if freq_lines:
 
