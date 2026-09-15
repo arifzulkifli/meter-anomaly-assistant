@@ -280,14 +280,16 @@ def parse_meter_values(text):
     if u3:
         data["u3"] = float(u3.group(1))
 
-    # --------------------
-    # CURRENT
-    # --------------------
+# --------------------
+# CURRENT
+# --------------------
 
     current_matches = re.findall(
         r'(\d+\.\d+)MA',
-        text
+        text.upper()
     )
+
+    st.write("DEBUG CURRENT:", current_matches)
 
     if len(current_matches) >= 3:
 
@@ -332,31 +334,34 @@ def parse_meter_values(text):
 # FREQUENCY
 # --------------------
 
-    freq_match = re.search(
-        r'F[: ]*(\d+\.\d+)',
-        text,
-        re.IGNORECASE
-    )
+    freq_lines = []
 
-    if freq_match:
+    for line in text.split("\n"):
 
-        freq = float(
-            freq_match.group(1)
-        )
+        if line.strip().startswith("F:"):
 
-        # OCR correction
-        if 55 <= freq <= 65:
+            freq_lines.append(line)
 
-            freq = (
-                50 +
-                freq -
-                int(freq)
+    st.write("DEBUG FREQ:", freq_lines)
+
+    if freq_lines:
+
+        try:
+
+            freq = float(
+                freq_lines[0].split(":")[1]
             )
 
-        data["freq"] = round(
-            freq,
-            2
-        )
+            if 55 <= freq <= 65:
+
+                freq = 50 + (
+                    freq - int(freq)
+                )
+
+            data["freq"] = round(freq, 2)
+
+        except:
+            pass
     return data
 # =====================================
 # ANALYSIS ENGINE
