@@ -826,15 +826,40 @@ if actual_img and error_img:
             actual_text
         )
 
-        st.subheader("METER DATA")
-        st.json(meter_data)
-
         error_value = extract_error(
             error_text
         )
 
-        st.subheader("ACCURACY OCR")
-        st.text(error_text)
+    st.success("OCR Extraction Completed")
+
+    # Debug
+
+    st.subheader("METER DATA")
+    st.json(meter_data)
+
+    st.subheader("ACCURACY OCR")
+    st.text(error_text)
+
+    # Force Verification Section
+
+    st.divider()
+
+    st.subheader("OCR Verification")
+
+    verified_data, verified_error = verify_ocr_values(
+        meter_data,
+        error_value
+    )
+
+    if st.button(
+        "✅ Confirm Readings"
+    ):
+
+        st.session_state["verified"] = True
+
+        st.session_state["verified_data"] = verified_data
+
+        st.session_state["verified_error"] = verified_error
 # =====================================
 # RUN INVESTIGATION
 # =====================================
