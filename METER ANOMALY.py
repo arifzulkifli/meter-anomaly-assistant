@@ -279,27 +279,35 @@ def parse_meter_values(text):
         return data
 
     text = text.upper()
+
     text = text.replace(",", ".")
 
-    # Common OCR fixes
+    # OCR corrections
+    text = text.replace("UX:", "U3:")
+    text = text.replace("UX ", "U3 ")
 
-    text = text.replace("UL", "U1")
-    text = text.replace("PFI", "PF1")
-    text = text.replace("II", "I1")
+    text = text.replace("II:", "I1:")
+    text = text.replace("II ", "I1 ")
+
+    text = text.replace("PFI:", "PF1:")
+    text = text.replace("PFI ", "PF1 ")
+
+    text = text.replace("PFA:", "PF3:")
+    text = text.replace("PFA ", "PF3 ")
 
     patterns = {
 
-        "u1": r"U1\s*([0-9]+\.[0-9]+)",
-        "u2": r"U2\s*([0-9]+\.[0-9]+)",
-        "u3": r"U3\s*([0-9]+\.[0-9]+)",
+        "u1": r"U1[: ]*([0-9]+\.[0-9]+)",
+        "u2": r"U2[: ]*([0-9]+\.[0-9]+)",
+        "u3": r"U3[: ]*([0-9]+\.[0-9]+)",
 
-        "i1": r"I1\s*([0-9]+\.[0-9]+)",
-        "i2": r"I2\s*([0-9]+\.[0-9]+)",
-        "i3": r"I3\s*([0-9]+\.[0-9]+)",
+        "i1": r"I1[: ]*([0-9]+\.[0-9]+)",
+        "i2": r"I2[: ]*([0-9]+\.[0-9]+)",
+        "i3": r"I3[: ]*([0-9]+\.[0-9]+)",
 
-        "pf1": r"PF1\s*(-?[0-9]+\.[0-9]+)",
-        "pf2": r"PF2\s*(-?[0-9]+\.[0-9]+)",
-        "pf3": r"PF3\s*(-?[0-9]+\.[0-9]+)"
+        "pf1": r"PF1[: ]*(-?[0-9]+\.[0-9]+)",
+        "pf2": r"PF2[: ]*(-?[0-9]+\.[0-9]+)",
+        "pf3": r"PF3[: ]*(-?[0-9]+\.[0-9]+)"
     }
 
     for key, pattern in patterns.items():
@@ -313,19 +321,43 @@ def parse_meter_values(text):
             except:
                 pass
 
-    freq_match = re.search(
-        r"([4-6][0-9]\.[0-9]+)\s*HZ",
+    # Total PF
+
+    match = re.search(
+        r"PF[: ]*([0-9]+\.[0-9]+)",
         text
     )
 
-    if freq_match:
+    if match:
 
         try:
-            data["freq"] = float(
-                freq_match.group(1)
+            data["pf_total"] = float(
+                match.group(1)
             )
         except:
             pass
+
+    # Frequency
+
+    match = re.search(
+        r"F[: ]*([0-9]+\.[0-9]+)",
+        text
+    )
+
+    if match:
+
+        freq = float(match.group(1))
+
+        # OCR often reads 50.06 as 60.06
+
+        if 55 <= freq <= 69:
+
+            freq = float(
+                "50." +
+                str(freq).split(".")[1]
+            )
+
+        data["freq"] = freq
 
     return data
 # =====================================
