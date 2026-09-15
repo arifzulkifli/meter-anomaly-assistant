@@ -144,30 +144,6 @@ def extract_error(text):
     for m in matches:
 
         try:
-            value = float(m)
-
-            if -100 <= value <= 100:
-                return value
-
-        except:
-            pass
-
-    return None
-def extract_error(text):
-
-    if not text:
-        return None
-
-    text = text.replace(",", ".")
-
-    matches = re.findall(
-        r'-?\d+\.\d+',
-        text
-    )
-
-    for m in matches:
-
-        try:
 
             value = float(m)
 
@@ -178,98 +154,6 @@ def extract_error(text):
             pass
 
     return None
-def parse_meter_values(text):
-
-    data = {}
-
-    if not text:
-        return data
-
-    text = text.upper()
-    text = text.replace(",", ".")
-
-    # OCR corrections observed from your screen
-
-    text = text.replace("UX:", "U3:")
-    text = text.replace("II:", "I1:")
-    text = text.replace("PFI:", "PF1:")
-    text = text.replace("PFA:", "PF3:")
-
-    # ------------------
-    # Voltage
-    # ------------------
-
-    voltages = re.findall(
-        r'U[A-Z0-9]*[: ]*([0-9]+\.[0-9]+)',
-        text
-    )
-
-    if len(voltages) >= 3:
-        data["u1"] = float(voltages[0])
-        data["u2"] = float(voltages[1])
-        data["u3"] = float(voltages[2])
-
-    # ------------------
-    # Current
-    # ------------------
-
-    currents = re.findall(
-        r'I[A-Z0-9]*[: ]*([0-9]+\.[0-9]+)',
-        text
-    )
-
-    if len(currents) >= 3:
-        data["i1"] = float(currents[0])
-        data["i2"] = float(currents[1])
-        data["i3"] = float(currents[2])
-
-    # ------------------
-    # Power Factor
-    # ------------------
-
-    pfs = re.findall(
-        r'PF[A-Z0-9]*[: ]*(-?[0-9]+\.[0-9]+)',
-        text
-    )
-
-    if len(pfs) >= 4:
-        data["pf1"] = float(pfs[0])
-        data["pf2"] = float(pfs[1])
-        data["pf3"] = float(pfs[2])
-        data["pf_total"] = float(pfs[3])
-
-    elif len(pfs) >= 3:
-        data["pf1"] = float(pfs[0])
-        data["pf2"] = float(pfs[1])
-        data["pf3"] = float(pfs[2])
-
-    # ------------------
-    # Frequency
-    # ------------------
-
-    freq_match = re.search(
-        r'F[: ]*([0-9]+\.[0-9]+)',
-        text
-    )
-
-    if freq_match:
-
-        freq = float(
-            freq_match.group(1)
-        )
-
-        # OCR often sees 50.06 as 60.06
-
-        if 55 <= freq <= 69:
-
-            freq = float(
-                "50." +
-                str(freq).split(".")[1]
-            )
-
-        data["freq"] = freq
-
-    return data
 # =====================================
 # METER VALUE PARSER
 # =====================================
@@ -282,85 +166,98 @@ def parse_meter_values(text):
         return data
 
     text = text.upper()
-
     text = text.replace(",", ".")
 
-    # OCR corrections
+    # OCR corrections observed from your meter
+
     text = text.replace("UX:", "U3:")
-    text = text.replace("UX ", "U3 ")
-
     text = text.replace("II:", "I1:")
-    text = text.replace("II ", "I1 ")
-
     text = text.replace("PFI:", "PF1:")
-    text = text.replace("PFI ", "PF1 ")
-
     text = text.replace("PFA:", "PF3:")
-    text = text.replace("PFA ", "PF3 ")
 
-    patterns = {
+    # -----------------
+    # Voltage
+    # -----------------
 
-        "u1": r"U1[: ]*([0-9]+\.[0-9]+)",
-        "u2": r"U2[: ]*([0-9]+\.[0-9]+)",
-        "u3": r"U3[: ]*([0-9]+\.[0-9]+)",
-
-        "i1": r"I1[: ]*([0-9]+\.[0-9]+)",
-        "i2": r"I2[: ]*([0-9]+\.[0-9]+)",
-        "i3": r"I3[: ]*([0-9]+\.[0-9]+)",
-
-        "pf1": r"PF1[: ]*(-?[0-9]+\.[0-9]+)",
-        "pf2": r"PF2[: ]*(-?[0-9]+\.[0-9]+)",
-        "pf3": r"PF3[: ]*(-?[0-9]+\.[0-9]+)"
-    }
-
-    for key, pattern in patterns.items():
-
-        match = re.search(pattern, text)
-
-        if match:
-
-            try:
-                data[key] = float(match.group(1))
-            except:
-                pass
-
-    # Total PF
-
-    match = re.search(
-        r"PF[: ]*([0-9]+\.[0-9]+)",
+    voltages = re.findall(
+        r'(\d{3}\.\d)',
         text
     )
 
-    if match:
+    if len(voltages) >= 3:
+
+        data["u1"] = float(voltages[0])
+        data["u2"] = float(voltages[1])
+        data["u3"] = float(voltages[2])
+
+    # -----------------
+    # Current
+    # -----------------
+
+    currents = re.findall(
+        r'(\d{3}\.\d+)MA',
+        text
+    )
+
+    if len(currents) >= 3:
+
+        data["i1"] = float(currents[0])
+        data["i2"] = float(currents[1])
+        data["i3"] = float(currents[2])
+
+    # -----------------
+    # PF
+    # -----------------
+
+    pf_matches = re.findall(
+        r'(-?\d\.\d{3})',
+        text
+    )
+
+    pf_values = []
+
+    for x in pf_matches:
 
         try:
-            data["pf_total"] = float(
-                match.group(1)
-            )
+
+            value = float(x)
+
+            if -1 <= value <= 1:
+                pf_values.append(value)
+
         except:
             pass
 
-    # Frequency
+    if len(pf_values) >= 4:
 
-    match = re.search(
-        r"F[: ]*([0-9]+\.[0-9]+)",
-        text
+        data["pf1"] = pf_values[0]
+        data["pf2"] = pf_values[1]
+        data["pf3"] = pf_values[2]
+        data["pf_total"] = pf_values[3]
+
+    # -----------------
+    # Frequency
+    # -----------------
+
+    freq_match = re.search(
+        r'F[: ]*(\d+\.\d+)',
+        text,
+        re.IGNORECASE
     )
 
-    if match:
+    if freq_match:
 
-        freq = float(match.group(1))
+        freq = float(
+            freq_match.group(1)
+        )
 
-        # OCR often reads 50.06 as 60.06
+        if 55 <= freq <= 65:
 
-        if 55 <= freq <= 69:
-
-            freq = float(
-                "50." +
-                str(freq).split(".")[1]
+            freq = 50 + (
+                freq - int(freq)
             )
 
-        data["freq"] = freq
+        data["freq"] = round(freq, 2)
 
     return data
 # =====================================
@@ -845,6 +742,7 @@ if actual_img and error_img:
 
         st.subheader("METER DATA")
         st.json(meter_data)
+
 
         error_value = extract_error(
         error_text
