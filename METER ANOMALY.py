@@ -361,7 +361,7 @@ def parse_meter_values(text):
             freq,
             2
         )
-
+    return data
 # =====================================
 # ANALYSIS ENGINE
 # =====================================
