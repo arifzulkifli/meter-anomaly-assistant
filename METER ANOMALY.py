@@ -773,6 +773,13 @@ if actual_img and error_img:
         meter_data = parse_meter_values(
         actual_text
         )
+        
+        st.subheader("OCR TEXT")
+        st.text(actual_text)
+
+        st.subheader("METER DATA")
+        st.json(meter_data)
+
 
         # DEBUG
         st.subheader("OCR TEXT")
