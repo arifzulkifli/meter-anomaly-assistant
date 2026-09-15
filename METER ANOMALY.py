@@ -125,7 +125,55 @@ def read_image(uploaded_file):
 # =====================================
 # PARSE ERROR %
 # =====================================
+def extract_error(text):
 
+    if not text:
+        return None
+
+    text = text.replace(",", ".")
+
+    matches = re.findall(
+        r'-?\d+\.\d+',
+        text
+    )
+
+    for m in matches:
+
+        try:
+            value = float(m)
+
+            if -100 <= value <= 100:
+                return value
+
+        except:
+            pass
+
+    return None
+def extract_error(text):
+
+    if not text:
+        return None
+
+    text = text.replace(",", ".")
+
+    matches = re.findall(
+        r'-?\d+\.\d+',
+        text
+    )
+
+    for m in matches:
+
+        try:
+
+            value = float(m)
+
+            if -100 <= value <= 100:
+                return value
+
+        except:
+            pass
+
+    return None
 def parse_meter_values(text):
 
     data = {}
@@ -134,10 +182,7 @@ def parse_meter_values(text):
         return data
 
     text = text.upper()
-
     text = text.replace(",", ".")
-
-    # Common OCR corrections
 
     text = text.replace("UL", "U1")
     text = text.replace("PFI", "PF1")
@@ -165,14 +210,9 @@ def parse_meter_values(text):
         if match:
 
             try:
-                data[key] = float(
-                    match.group(1)
-                )
-
+                data[key] = float(match.group(1))
             except:
                 pass
-
-    # Frequency
 
     freq_match = re.search(
         r"([4-6][0-9]\.[0-9]+)\s*HZ",
@@ -182,11 +222,9 @@ def parse_meter_values(text):
     if freq_match:
 
         try:
-
             data["freq"] = float(
                 freq_match.group(1)
             )
-
         except:
             pass
 
@@ -252,9 +290,36 @@ def parse_meter_values(text):
             pass
 
     return data
-    # -------------------------
-    # Accuracy
-    # -------------------------
+# =====================================
+# ANALYSIS ENGINE
+# =====================================
+
+def analyze_meter(
+    data,
+    error_value,
+    meter_class,
+    meter_type,
+    complaint_type
+):
+
+    findings = []
+    recommendations = []
+
+    scores = {
+        "Meter Internal Fault": 10,
+        "CT Polarity Reversed": 10,
+        "Wrong Phase Association": 10,
+        "Low Power Factor Load": 10,
+        "Customer Load Increase": 10,
+        "Installation Wiring Issue": 10,
+        "Test Set Error": 10
+    }
+
+    pf1 = data.get("pf1")
+    pf2 = data.get("pf2")
+    pf3 = data.get("pf3")
+
+    freq = data.get("freq")
 
     if error_value is not None:
 
@@ -282,11 +347,7 @@ def parse_meter_values(text):
 
             scores["Meter Internal Fault"] += 70
 
-    # -------------------------
-    # Power Factor
-    # -------------------------
-
-    negative_pf = 0
+    pf_values = []
 
     for pf_name, value in {
         "PF1": pf1,
@@ -296,26 +357,15 @@ def parse_meter_values(text):
 
         if value is not None:
 
-            if value < 0:
+            pf_values.append(value)
 
-                negative_pf += 1
+            if value < 0:
 
                 findings.append(
                     f"{pf_name} negative ({value})"
                 )
 
                 scores["CT Polarity Reversed"] += 35
-
-    # -------------------------
-    # PF Spread
-    # -------------------------
-
-    pf_values = []
-
-    for x in [pf1, pf2, pf3]:
-
-        if x is not None:
-            pf_values.append(x)
 
     if len(pf_values) == 3:
 
@@ -328,12 +378,12 @@ def parse_meter_values(text):
             )
 
             scores["Wrong Phase Association"] += 40
+
             scores["Installation Wiring Issue"] += 20
 
-        avg_pf = sum([
-            abs(x)
-            for x in pf_values
-        ]) / 3
+        avg_pf = sum(
+            abs(x) for x in pf_values
+        ) / 3
 
         if avg_pf < 0.85:
 
@@ -342,10 +392,6 @@ def parse_meter_values(text):
             )
 
             scores["Low Power Factor Load"] += 30
-
-    # -------------------------
-    # Frequency
-    # -------------------------
 
     if freq is not None:
 
@@ -357,87 +403,49 @@ def parse_meter_values(text):
 
             scores["Test Set Error"] += 10
 
-    # -------------------------
-    # High Bill Logic
-    # -------------------------
-
     if complaint_type == "High Bill":
 
         scores["Customer Load Increase"] += 35
 
-        if error_value is not None:
-
-            if abs(error_value) <= 0.5:
-
-                scores["Customer Load Increase"] += 20
-                scores["Meter Internal Fault"] -= 10
-
-    # -------------------------
-    # Probability
-    # -------------------------
-
     scores = {
-        k:max(v,0)
-        for k,v in scores.items()
+        k: max(v, 0)
+        for k, v in scores.items()
     }
 
     total = sum(scores.values())
 
     ranked = []
 
-    for cause,value in scores.items():
+    for cause, value in scores.items():
 
-        percentage = round(
+        probability = round(
             value / total * 100,
             1
         )
 
         ranked.append(
-            (
-                cause,
-                percentage
-            )
+            (cause, probability)
         )
 
     ranked.sort(
-        key=lambda x:x[1],
+        key=lambda x: x[1],
         reverse=True
     )
 
-    # -------------------------
-    # Customer Explanation
-    # -------------------------
+    customer_response = """
+Investigation completed.
 
-    if error_value is not None and abs(error_value) <= 0.5:
-
-        customer_response = f"""
-Meter accuracy test recorded {error_value:.2f}% deviation.
-
-This result is within acceptable limits and does not indicate meter over-registration.
-
-Abnormal power factor conditions were detected during testing.
-
-Low power factor may be caused by customer electrical equipment, wiring conditions, phase association issues, CT polarity issues or installation conditions.
-
-Current evidence suggests further verification should focus on installation and load characteristics before concluding that the meter is faulty.
+Please refer to engineering assessment below.
 """
-
-    else:
-
-        customer_response = """
-Additional verification required before final conclusion.
-"""
-
-    recommendations = []
 
     top_cause = ranked[0][0]
 
     if top_cause == "CT Polarity Reversed":
 
         recommendations.extend([
-            "Verify CT S1/S2 polarity",
+            "Verify CT polarity",
             "Verify current lead orientation",
-            "Repeat vector diagram test"
+            "Repeat vector test"
         ])
 
     elif top_cause == "Wrong Phase Association":
@@ -448,14 +456,11 @@ Additional verification required before final conclusion.
             "Repeat phase angle verification"
         ])
 
-    elif top_cause == "Low Power Factor Load":
+    else:
 
-        recommendations.extend([
-            "Inspect motors",
-            "Inspect compressors",
-            "Inspect welding equipment",
-            "Evaluate capacitor bank performance"
-        ])
+        recommendations.append(
+            "Further site verification recommended"
+        )
 
     return (
         findings,
