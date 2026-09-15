@@ -285,26 +285,18 @@ def parse_meter_values(text):
 # CURRENT
 # --------------------
 
-    text = text.replace("II:", "I1:")
-    text = text.replace("II;", "I1:")
-    text = text.replace("II", "I1")
-
-    text = text.replace("IZ:", "I2:")
-    text = text.replace("IZ;", "I2:")
-    text = text.replace("IZ", "I2")
-
-    current_matches = re.findall(
-        r'I[123][: ]*(\d+\.\d+)',
-        text
+    current_values = re.findall(
+        r'(\d+\.\d+)MA',
+        text.upper()
     )
 
-    st.write("DEBUG CURRENT:", current_matches)
+    st.write("DEBUG CURRENT:", current_values)
 
-    if len(current_matches) >= 3:
+    if len(current_values) >= 3:
 
-        data["i1"] = float(current_matches[0])
-        data["i2"] = float(current_matches[1])
-        data["i3"] = float(current_matches[2])
+        data["i1"] = float(current_values[0])
+        data["i2"] = float(current_values[1])
+        data["i3"] = float(current_values[2])
 
 
 
