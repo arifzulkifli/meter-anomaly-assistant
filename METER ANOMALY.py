@@ -117,16 +117,14 @@ def read_image(uploaded_file):
         detail=1
     )
 
-    st.subheader("OCR RAW RESULT")
-
-    st.json(result)
-
     texts = []
 
     for item in result:
         texts.append(item[1])
 
-    return "\n".join(texts)
+    ocr_text = "\n".join(texts)
+
+    return ocr_text
 
 # =====================================
 # PARSE ERROR %
@@ -773,11 +771,18 @@ if actual_img and error_img:
         error_text = read_image(error_img)
 
         meter_data = parse_meter_values(
-            actual_text
+        actual_text
         )
 
+        # DEBUG
+        st.subheader("OCR TEXT")
+        st.text(actual_text)
+
+        st.subheader("PARSED DATA")
+        st.json(meter_data)
+
         error_value = extract_error(
-            error_text
+        error_text
         )
 
     st.success(
