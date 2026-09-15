@@ -820,55 +820,21 @@ if actual_img and error_img:
 
         actual_text = read_image(actual_img)
 
-        error_text = read_accuracy_image(error_img)
+        error_text = read_image(error_img)
 
         meter_data = parse_meter_values(
             actual_text
         )
 
+        st.subheader("METER DATA")
+        st.json(meter_data)
+
         error_value = extract_error(
             error_text
         )
 
-        # DEBUG OUTPUTS
-
-        st.subheader("METER DATA")
-        st.json(meter_data)
-
         st.subheader("ACCURACY OCR")
         st.text(error_text)
-
-    st.success(
-        "OCR Extraction Completed"
-    )
-
-
-    with st.expander(
-        "View Raw OCR Output"
-    ):
-        st.subheader("Parsed Meter Data")
-
-        st.json(meter_data)
-
-        st.text(actual_text)
-
-        st.text(error_text)
-
-    verified_data, verified_error = verify_ocr_values(
-        meter_data,
-        error_value
-    )
-
-    if st.button(
-        "✅ Confirm Readings"
-    ):
-
-        st.session_state["verified"] = True
-
-        st.session_state["verified_data"] = verified_data
-
-        st.session_state["verified_error"] = verified_error
-
 # =====================================
 # RUN INVESTIGATION
 # =====================================
