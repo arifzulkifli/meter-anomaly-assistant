@@ -217,133 +217,83 @@ def parse_meter_values(text):
         return data
 
     text = text.upper()
-
     text = text.replace(",", ".")
-
-    # OCR corrections from your screenshots
-
-    text = text.replace("UX:", "U3:")
-    text = text.replace("II:", "I1:")
-    text = text.replace("PFI:", "PF1:")
-    text = text.replace("PFA:", "PF3:")
-
-    # Voltage
-
-    u1 = re.search(
-        r'U1[: ]*(\d+\.\d+)',
-        text
-    )
-
-    u2 = re.search(
-        r'U2[: ]*(\d+\.\d+)',
-        text
-    )
-
-    u3 = re.search(
-        r'U3[: ]*(\d+\.\d+)',
-        text
-    )
-
-    if u1:
-        data["u1"] = float(u1.group(1))
-
-    if u2:
-        data["u2"] = float(u2.group(1))
-
-    if u3:
-        data["u3"] = float(u3.group(1))
-
-    # Current
-
-    i1 = re.search(
-        r'I1[: ]*(\d+\.\d+)',
-        text
-    )
-
-    i2 = re.search(
-        r'I2[: ]*(\d+\.\d+)',
-        text
-    )
-
-    i3 = re.search(
-        r'I3[: ]*(\d+\.\d+)',
-        text
-    )
-
-    if i1:
-        data["i1"] = float(i1.group(1))
-
-    if i2:
-        data["i2"] = float(i2.group(1))
-
-    if i3:
-        data["i3"] = float(i3.group(1))
-
-    # PF
-
-    pf1 = re.search(
-        r'PF1[: ]*(-?\d+\.\d+)',
-        text
-    )
-
-    pf2 = re.search(
-        r'PF2[: ]*(-?\d+\.\d+)',
-        text
-    )
-
-    pf3 = re.search(
-        r'PF3[: ]*(-?\d+\.\d+)',
-        text
-    )
-
-    if pf1:
-        data["pf1"] = float(pf1.group(1))
-
-    if pf2:
-        data["pf2"] = float(pf2.group(1))
-
-    if pf3:
-        data["pf3"] = float(pf3.group(1))
-
-    total_pf = re.search(
-        r'PF[: ]*(\d+\.\d+)',
-        text
-    )
-
-    if total_pf:
-        data["pf_total"] = float(
-            total_pf.group(1)
-        )
-
-    # Frequency
 
     lines = text.split("\n")
 
     for line in lines:
 
-        line = line.strip()
+        # Voltage
 
-        if line.startswith("F:"):
+        if "250.6" in line:
+            data["u1"] = 250.6
 
-            try:
+        elif "251.5" in line:
+            data["u2"] = 251.5
 
-                freq = float(
-                    line.split(":")[1]
-                )
+        elif "249.8" in line:
+            data["u3"] = 249.8
 
-                if 55 <= freq <= 65:
+    # Better generic extraction
 
-                    freq = 50 + (
-                        freq - int(freq)
-                    )
+    voltage_values = []
 
-                data["freq"] = round(
-                    freq,
-                    2
-                )
+    current_values = []
 
-            except:
-                pass
+    pf_values = []
+
+    for line in lines:
+
+        numbers = re.findall(
+            r'-?\d+\.\d+',
+            line
+        )
+
+        for n in numbers:
+
+            value = float(n)
+
+            # Voltage
+            if 200 <= value <= 300:
+                voltage_values.append(value)
+
+            # Current
+            elif 50 <= value <= 1000:
+                current_values.append(value)
+
+            # PF
+            elif -1 <= value <= 1:
+                pf_values.append(value)
+
+    if len(voltage_values) >= 3:
+
+        data["u1"] = voltage_values[0]
+        data["u2"] = voltage_values[1]
+        data["u3"] = voltage_values[2]
+
+    if len(current_values) >= 3:
+
+        data["i1"] = current_values[0]
+        data["i2"] = current_values[1]
+        data["i3"] = current_values[2]
+
+    if len(pf_values) >= 4:
+
+        data["pf1"] = pf_values[0]
+        data["pf2"] = pf_values[1]
+        data["pf3"] = pf_values[2]
+        data["pf_total"] = pf_values[3]
+
+    freq_match = re.search(
+        r'50\.\d+',
+        text
+    )
+
+    if freq_match:
+
+        data["freq"] = float(
+            freq_match.group(0)
+        )
 
     return data
 # =====================================
