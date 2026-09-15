@@ -235,13 +235,14 @@ def parse_meter_values(text):
             data["u3"] = 249.8
 
 # OCR corrections observed from PTS
-
+    # Voltage corrections
     text = text.replace("UX:", "U3:")
-
+    # Current corrections
     text = text.replace("II:", "I1:")
+    text = text.replace("IZ:", "I2:")
+    text = text.replace("IZ;", "I2:")
     text = text.replace("IL:", "I1:")
     text = text.replace("LI:", "I1:")
-    text = text.replace("II;", "I1:")
 
     text = text.replace("PFI:", "PF1:")
     text = text.replace("PFI;", "PF1:")
@@ -284,35 +285,39 @@ def parse_meter_values(text):
 # CURRENT
 # --------------------
 
-    current_matches = re.findall(
-        r'(\d+\.\d+)MA',
-        text.upper()
+# OCR corrections for current labels
+
+    text = text.replace("II:", "I1:")
+    text = text.replace("II;", "I1:")
+    text = text.replace("IZ:", "I2:")
+    text = text.replace("IZ;", "I2:")
+    text = text.replace("II:", "I1:")
+    text = text.replace("LI:", "I1:")
+    text = text.replace("IL:", "I1:")
+
+    i1 = re.search(
+        r'I1[: ]*(\d+\.\d+)',
+        text
     )
 
-    st.write("DEBUG CURRENT:", current_matches)
+    i2 = re.search(
+        r'I2[: ]*(\d+\.\d+)',
+        text
+    )
 
-# Remove phase-phase voltages accidentally captured
-    filtered_currents = []
+    i3 = re.search(
+        r'I3[: ]*(\d+\.\d+)',
+        text
+    )
 
-    for val in current_matches:
+    if i1:
+        data["i1"] = float(i1.group(1))
 
-        try:
+    if i2:
+        data["i2"] = float(i2.group(1))
 
-            num = float(val)
-
-        # Current values around 298mA
-            if 100 <= num <= 400:
-
-                filtered_currents.append(num)
-
-        except:
-            pass
-
-    if len(filtered_currents) >= 3:
-
-        data["i1"] = filtered_currents[0]
-        data["i2"] = filtered_currents[1]
-        data["i3"] = filtered_currents[2]
+    if i3:
+        data["i3"] = float(i3.group(1))
 
 
 # --------------------
