@@ -112,12 +112,18 @@ def read_image(uploaded_file):
         cv2.COLOR_RGB2GRAY
     )
 
-    result = reader.readtext(gray)
+    result = reader.readtext(
+        gray,
+        detail=1
+    )
+
+    st.subheader("OCR RAW RESULT")
+
+    st.json(result)
 
     texts = []
 
     for item in result:
-
         texts.append(item[1])
 
     return "\n".join(texts)
@@ -781,6 +787,9 @@ if actual_img and error_img:
     with st.expander(
         "View Raw OCR Output"
     ):
+        st.subheader("Parsed Meter Data")
+
+        st.json(meter_data)
 
         st.text(actual_text)
 
