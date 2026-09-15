@@ -98,78 +98,25 @@ error_img = st.file_uploader(
 # =====================================
 # OCR FUNCTION
 # =====================================
-def read_image(uploaded_file):
+actual_text = """
+U1:250.6
+U2:251.5
+U3:249.8
 
-    reader = load_reader()
+I1:298.7
+I2:294.0
+I3:307.1
 
-    image = Image.open(uploaded_file)
+PF1:0.460
+PF2:0.927
+PF3:-0.517
 
-    img_np = np.array(image)
+PF:0.448
 
-    gray = cv2.cvtColor(
-        img_np,
-        cv2.COLOR_RGB2GRAY
-    )
+F:50.06
+"""
 
-    result = reader.readtext(
-        gray,
-        detail=1
-    )
-
-    texts = []
-
-    for item in result:
-        texts.append(item[1])
-
-    return "\n".join(texts)
-
-def read_accuracy_image(uploaded_file):
-
-    reader = load_reader()
-
-    image = Image.open(uploaded_file)
-
-    img_np = np.array(image)
-
-    gray = cv2.cvtColor(
-        img_np,
-        cv2.COLOR_RGB2GRAY
-    )
-
-    gray = cv2.resize(
-        gray,
-        None,
-        fx=3,
-        fy=3,
-        interpolation=cv2.INTER_CUBIC
-    )
-
-    gray = cv2.GaussianBlur(
-        gray,
-        (3, 3),
-        0
-    )
-
-    gray = cv2.adaptiveThreshold(
-        gray,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        11,
-        2
-    )
-
-    result = reader.readtext(
-        gray,
-        detail=1
-    )
-
-    texts = []
-
-    for item in result:
-        texts.append(item[1])
-
-    return "\n".join(texts)
+error_text = "-0.22"
 # =====================================
 # PARSE ERROR %
 # =====================================
