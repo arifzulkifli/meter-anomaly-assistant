@@ -98,28 +98,86 @@ error_img = st.file_uploader(
 # =====================================
 # OCR FUNCTION
 # =====================================
-actual_text = """
-U1:250.6
-U2:251.5
-U3:249.8
 
-I1:298.7
-I2:294.0
-I3:307.1
+def read_image(uploaded_file):
 
-PF1:0.460
-PF2:0.927
-PF3:-0.517
+    reader = load_reader()
 
-PF:0.448
+    image = Image.open(uploaded_file)
 
-F:50.06
-"""
+    img_np = np.array(image)
 
-error_text = "-0.22"
+    gray = cv2.cvtColor(
+        img_np,
+        cv2.COLOR_RGB2GRAY
+    )
+
+    result = reader.readtext(
+        gray,
+        detail=1
+    )
+
+    texts = []
+
+    for item in result:
+        texts.append(item[1])
+
+    return "\n".join(texts)
+
+
+def read_accuracy_image(uploaded_file):
+
+    reader = load_reader()
+
+    image = Image.open(uploaded_file)
+
+    img_np = np.array(image)
+
+    gray = cv2.cvtColor(
+        img_np,
+        cv2.COLOR_RGB2GRAY
+    )
+
+    gray = cv2.resize(
+        gray,
+        None,
+        fx=3,
+        fy=3,
+        interpolation=cv2.INTER_CUBIC
+    )
+
+    gray = cv2.GaussianBlur(
+        gray,
+        (3,3),
+        0
+    )
+
+    gray = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        11,
+        2
+    )
+
+    result = reader.readtext(
+        gray,
+        detail=1
+    )
+
+    texts = []
+
+    for item in result:
+        texts.append(item[1])
+
+    return "\n".join(texts)
+
+
 # =====================================
 # PARSE ERROR %
 # =====================================
+
 def extract_error(text):
 
     if not text:
@@ -145,8 +203,10 @@ def extract_error(text):
             pass
 
     return None
+
+
 # =====================================
-# METER VALUE PARSER
+# PARSE METER VALUES
 # =====================================
 
 def parse_meter_values(text):
@@ -157,18 +217,17 @@ def parse_meter_values(text):
         return data
 
     text = text.upper()
+
     text = text.replace(",", ".")
 
-    # OCR corrections seen on your PTS
+    # OCR corrections from your screenshots
 
     text = text.replace("UX:", "U3:")
     text = text.replace("II:", "I1:")
     text = text.replace("PFI:", "PF1:")
     text = text.replace("PFA:", "PF3:")
 
-    # --------------------
-    # VOLTAGE
-    # --------------------
+    # Voltage
 
     u1 = re.search(
         r'U1[: ]*(\d+\.\d+)',
@@ -193,9 +252,8 @@ def parse_meter_values(text):
 
     if u3:
         data["u3"] = float(u3.group(1))
-    # --------------------
-    # CURRENT
-    # --------------------
+
+    # Current
 
     i1 = re.search(
         r'I1[: ]*(\d+\.\d+)',
@@ -221,9 +279,7 @@ def parse_meter_values(text):
     if i3:
         data["i3"] = float(i3.group(1))
 
-    # --------------------
     # PF
-    # --------------------
 
     pf1 = re.search(
         r'PF1[: ]*(-?\d+\.\d+)',
@@ -231,7 +287,7 @@ def parse_meter_values(text):
     )
 
     pf2 = re.search(
-        r'*F2[: ]*(-?\d+\.\d+)',
+        r'PF2[: ]*(-?\d+\.\d+)',
         text
     )
 
@@ -249,19 +305,17 @@ def parse_meter_values(text):
     if pf3:
         data["pf3"] = float(pf3.group(1))
 
-    pf_total = re.search(
+    total_pf = re.search(
         r'PF[: ]*(\d+\.\d+)',
         text
     )
 
-    if pf_total:
-
+    if total_pf:
         data["pf_total"] = float(
-            pf_total.group(1)
+            total_pf.group(1)
         )
-    # --------------------
-    # FREQUENCY
-    # --------------------
+
+    # Frequency
 
     lines = text.split("\n")
 
@@ -279,10 +333,8 @@ def parse_meter_values(text):
 
                 if 55 <= freq <= 65:
 
-                    freq = (
-                        50 +
-                        freq -
-                        int(freq)
+                    freq = 50 + (
+                        freq - int(freq)
                     )
 
                 data["freq"] = round(
@@ -292,6 +344,8 @@ def parse_meter_values(text):
 
             except:
                 pass
+
+    return data
 # =====================================
 # ANALYSIS ENGINE
 # =====================================
@@ -768,24 +822,26 @@ if actual_img and error_img:
 
         error_text = read_accuracy_image(error_img)
 
-        st.subheader("ACCURACY OCR")
-        st.text(error_text)
-
         meter_data = parse_meter_values(
-        actual_text
+            actual_text
         )
+
+        error_value = extract_error(
+            error_text
+        )
+
+        # DEBUG OUTPUTS
 
         st.subheader("METER DATA")
         st.json(meter_data)
 
-
-        error_value = extract_error(
-        error_text
-        )
+        st.subheader("ACCURACY OCR")
+        st.text(error_text)
 
     st.success(
         "OCR Extraction Completed"
     )
+
 
     with st.expander(
         "View Raw OCR Output"
