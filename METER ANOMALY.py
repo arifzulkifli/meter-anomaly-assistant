@@ -234,14 +234,23 @@ def parse_meter_values(text):
         elif "249.8" in line:
             data["u3"] = 249.8
 
-# OCR corrections
+# OCR corrections observed from PTS
 
     text = text.replace("UX:", "U3:")
-    text = text.replace("PFI:", "PF1:")
-    text = text.replace("PFA:", "PF3:")
+
     text = text.replace("II:", "I1:")
     text = text.replace("IL:", "I1:")
     text = text.replace("LI:", "I1:")
+    text = text.replace("II;", "I1:")
+
+    text = text.replace("PFI:", "PF1:")
+    text = text.replace("PFI;", "PF1:")
+
+    text = text.replace("PFZ:", "PF2:")
+    text = text.replace("PF2;", "PF2:")
+
+    text = text.replace("PFA:", "PF3:")
+    text = text.replace("PFA;", "PF3:")
 
     # --------------------
     # VOLTAGE
@@ -275,106 +284,79 @@ def parse_meter_values(text):
     # CURRENT
     # --------------------
 
-    i1 = re.search(
-        r'I1[: ]*(\d+\.\d+)',
+    current_matches = re.findall(
+        r'(\d+\.\d+)MA',
         text
     )
 
-    i2 = re.search(
-        r'I2[: ]*(\d+\.\d+)',
+    if len(current_matches) >= 3:
+
+        data["i1"] = float(current_matches[0])
+        data["i2"] = float(current_matches[1])
+        data["i3"] = float(current_matches[2])
+
+
+# --------------------
+# POWER FACTOR
+# --------------------
+
+    pf_matches = re.findall(
+        r'(-?\d\.\d{3})',
         text
     )
 
-    i3 = re.search(
-        r'I3[: ]*(\d+\.\d+)',
-        text
+    pf_values = []
+
+    for x in pf_matches:
+
+        try:
+
+            value = float(x)
+
+            if -1 <= value <= 1:
+
+                pf_values.append(value)
+
+        except:
+            pass
+
+    if len(pf_values) >= 4:
+
+        data["pf1"] = pf_values[0]
+        data["pf2"] = pf_values[1]
+        data["pf3"] = pf_values[2]
+        data["pf_total"] = pf_values[3]
+
+
+# --------------------
+# FREQUENCY
+# --------------------
+
+    freq_match = re.search(
+        r'F[: ]*(\d+\.\d+)',
+        text,
+        re.IGNORECASE
     )
 
-    if i1:
-        data["i1"] = float(i1.group(1))
+    if freq_match:
 
-    if i2:
-        data["i2"] = float(i2.group(1))
-
-    if i3:
-        data["i3"] = float(i3.group(1))
-
-    # --------------------
-    # POWER FACTOR
-    # --------------------
-
-    pf1 = re.search(
-        r'PF1[: ]*(-?\d+\.\d+)',
-        text
-    )
-
-    pf2 = re.search(
-        r'PF2[: ]*(-?\d+\.\d+)',
-        text
-    )
-
-    pf3 = re.search(
-        r'PF3[: ]*(-?\d+\.\d+)',
-        text
-    )
-
-    if pf1:
-        data["pf1"] = float(pf1.group(1))
-
-    if pf2:
-        data["pf2"] = float(pf2.group(1))
-
-    if pf3:
-        data["pf3"] = float(pf3.group(1))
-
-    pf_total = re.search(
-        r'PF[: ]*(\d+\.\d+)',
-        text
-    )
-
-    if pf_total:
-        data["pf_total"] = float(
-            pf_total.group(1)
+        freq = float(
+            freq_match.group(1)
         )
 
+        # OCR correction
+        if 55 <= freq <= 65:
 
-    # --------------------
-    # FREQUENCY
-    # --------------------
+            freq = (
+                50 +
+                freq -
+                int(freq)
+            )
 
-    lines = text.split("\n")
-
-    for line in lines:
-
-        line = line.strip()
-
-        # Ignore PF:0.448
-        # Only capture actual frequency line
-
-        if line.startswith("F:"):
-
-            try:
-
-                freq = float(
-                    line.split(":")[1]
-                )
-
-                # OCR correction
-                if 55 <= freq <= 65:
-
-                    freq = (
-                        50 +
-                        freq -
-                        int(freq)
-                    )
-
-                data["freq"] = round(
-                    freq,
-                    2
-                )
-
-            except:
-                pass
+        data["freq"] = round(
+            freq,
+            2
+        )
     return data
 # =====================================
 # ANALYSIS ENGINE
@@ -869,7 +851,7 @@ if actual_img and error_img:
 
     st.subheader("PTS OCR TEXT")
     st.text(actual_text)
-    
+
     st.subheader("ACCURACY OCR")
     st.text(error_text)
 
