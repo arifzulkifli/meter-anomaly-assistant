@@ -186,51 +186,85 @@ def parse_meter_values(text):
         return data
 
     text = text.upper()
+
     text = text.replace(",", ".")
 
+    # Common OCR corrections
+
     text = text.replace("UL", "U1")
-    text = text.replace("PFI", "PF1")
+    text = text.replace("UX", "U3")
+
+    text = text.replace("II:", "I1:")
     text = text.replace("II", "I1")
 
-    patterns = {
+    text = text.replace("PFI:", "PF1:")
+    text = text.replace("PFI", "PF1")
 
-        "u1": r"U1\s*([0-9]+\.[0-9]+)",
-        "u2": r"U2\s*([0-9]+\.[0-9]+)",
-        "u3": r"U3\s*([0-9]+\.[0-9]+)",
+    text = text.replace("PFA:", "PF3:")
+    text = text.replace("PFA", "PF3")
 
-        "i1": r"I1\s*([0-9]+\.[0-9]+)",
-        "i2": r"I2\s*([0-9]+\.[0-9]+)",
-        "i3": r"I3\s*([0-9]+\.[0-9]+)",
+    # Voltage
 
-        "pf1": r"PF1\s*(-?[0-9]+\.[0-9]+)",
-        "pf2": r"PF2\s*(-?[0-9]+\.[0-9]+)",
-        "pf3": r"PF3\s*(-?[0-9]+\.[0-9]+)"
-    }
+    match = re.search(r"U1[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["u1"] = float(match.group(1))
 
-    for key, pattern in patterns.items():
+    match = re.search(r"U2[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["u2"] = float(match.group(1))
 
-        match = re.search(pattern, text)
+    match = re.search(r"U3[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["u3"] = float(match.group(1))
 
-        if match:
+    # Current
 
-            try:
-                data[key] = float(match.group(1))
-            except:
-                pass
+    match = re.search(r"I1[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["i1"] = float(match.group(1))
 
-    freq_match = re.search(
-        r"([4-6][0-9]\.[0-9]+)\s*HZ",
-        text
-    )
+    match = re.search(r"I2[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["i2"] = float(match.group(1))
 
-    if freq_match:
+    match = re.search(r"I3[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["i3"] = float(match.group(1))
 
-        try:
-            data["freq"] = float(
-                freq_match.group(1)
+    # Power Factor
+
+    match = re.search(r"PF1[: ]*(-?[0-9]+\.[0-9]+)", text)
+    if match:
+        data["pf1"] = float(match.group(1))
+
+    match = re.search(r"PF2[: ]*(-?[0-9]+\.[0-9]+)", text)
+    if match:
+        data["pf2"] = float(match.group(1))
+
+    match = re.search(r"PF3[: ]*(-?[0-9]+\.[0-9]+)", text)
+    if match:
+        data["pf3"] = float(match.group(1))
+
+    match = re.search(r"PF[: ]*([0-9]+\.[0-9]+)", text)
+    if match:
+        data["pf_total"] = float(match.group(1))
+
+    # Frequency
+
+    match = re.search(r"F[: ]*([0-9]+\.[0-9]+)", text)
+
+    if match:
+
+        freq = float(match.group(1))
+
+        # Automatic correction
+        if 55 <= freq <= 69:
+
+            freq = float(
+                "50." + str(freq).split(".")[1]
             )
-        except:
-            pass
+
+        data["freq"] = freq
 
     return data
 # =====================================
@@ -773,7 +807,7 @@ if actual_img and error_img:
         meter_data = parse_meter_values(
         actual_text
         )
-        
+
         st.subheader("OCR TEXT")
         st.text(actual_text)
 
