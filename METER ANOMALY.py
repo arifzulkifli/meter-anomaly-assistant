@@ -199,112 +199,128 @@ def parse_meter_values(text):
     # VOLTAGE
     # --------------------
 
-    voltage_matches = re.findall(
-        r'U[0-9A-Z]+[: ]*(\d+\.\d+)',
+    u1 = re.search(
+        r'U1[: ]*(\d+\.\d+)',
         text
     )
 
-    valid_voltages = []
+    u2 = re.search(
+        r'U2[: ]*(\d+\.\d+)',
+        text
+    )
 
-    for v in voltage_matches:
+    u3 = re.search(
+        r'U3[: ]*(\d+\.\d+)',
+        text
+    )
 
-        try:
+    if u1:
+        data["u1"] = float(u1.group(1))
 
-            value = float(v)
+    if u2:
+        data["u2"] = float(u2.group(1))
 
-            if 200 <= value <= 300:
-                valid_voltages.append(value)
-
-        except:
-            pass
-
-    if len(valid_voltages) >= 3:
-
-        data["u1"] = valid_voltages[0]
-        data["u2"] = valid_voltages[1]
-        data["u3"] = valid_voltages[2]
-
+    if u3:
+        data["u3"] = float(u3.group(1))
     # --------------------
     # CURRENT
     # --------------------
 
-    current_matches = re.findall(
-        r'I[0-9A-Z]+[: ]*(\d+\.\d+)',
+    i1 = re.search(
+        r'I1[: ]*(\d+\.\d+)',
         text
     )
 
-    valid_currents = []
+    i2 = re.search(
+        r'I2[: ]*(\d+\.\d+)',
+        text
+    )
 
-    for i in current_matches:
+    i3 = re.search(
+        r'I3[: ]*(\d+\.\d+)',
+        text
+    )
 
-        try:
+    if i1:
+        data["i1"] = float(i1.group(1))
 
-            value = float(i)
+    if i2:
+        data["i2"] = float(i2.group(1))
 
-            if value > 1:
-                valid_currents.append(value)
-
-        except:
-            pass
-
-    if len(valid_currents) >= 3:
-
-        data["i1"] = valid_currents[0]
-        data["i2"] = valid_currents[1]
-        data["i3"] = valid_currents[2]
+    if i3:
+        data["i3"] = float(i3.group(1))
 
     # --------------------
     # PF
     # --------------------
 
-    pf_matches = re.findall(
-        r'PF[0-9A-Z]*[: ]*(-?\d+\.\d+)',
+    pf1 = re.search(
+        r'PF1[: ]*(-?\d+\.\d+)',
         text
     )
 
-    pf_values = []
+    pf2 = re.search(
+        r'*F2[: ]*(-?\d+\.\d+)',
+        text
+    )
 
-    for x in pf_matches:
+    pf3 = re.search(
+        r'PF3[: ]*(-?\d+\.\d+)',
+        text
+    )
 
-        try:
+    if pf1:
+        data["pf1"] = float(pf1.group(1))
 
-            value = float(x)
+    if pf2:
+        data["pf2"] = float(pf2.group(1))
 
-            if -1 <= value <= 1:
-                pf_values.append(value)
+    if pf3:
+        data["pf3"] = float(pf3.group(1))
 
-        except:
-            pass
+    pf_total = re.search(
+        r'PF[: ]*(\d+\.\d+)',
+        text
+    )
 
-    if len(pf_values) >= 4:
+    if pf_total:
 
-        data["pf1"] = pf_values[0]
-        data["pf2"] = pf_values[1]
-        data["pf3"] = pf_values[2]
-        data["pf_total"] = pf_values[3]
-
+        data["pf_total"] = float(
+            pf_total.group(1)
+        )
     # --------------------
     # FREQUENCY
     # --------------------
 
-    freq_match = re.search(
-        r'F[: ]*(\d+\.\d+)',
-        text
-    )
+    lines = text.split("\n")
 
-    if freq_match:
+    for line in lines:
 
-        freq = float(freq_match.group(1))
+        line = line.strip()
 
-        if 55 <= freq <= 65:
+        if line.startswith("F:"):
 
-            freq = 50 + (
-                freq - int(freq)
-            )
+            try:
 
-        data["freq"] = round(freq, 2)
+                freq = float(
+                    line.split(":")[1]
+                )
 
-    return data
+                if 55 <= freq <= 65:
+
+                    freq = (
+                        50 +
+                        freq -
+                        int(freq)
+                    )
+
+                data["freq"] = round(
+                    freq,
+                    2
+                )
+
+            except:
+                pass
 # =====================================
 # ANALYSIS ENGINE
 # =====================================
