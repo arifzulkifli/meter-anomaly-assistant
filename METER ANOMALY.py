@@ -284,18 +284,28 @@ def parse_meter_values(text):
 # CURRENT
 # --------------------
 
-    current_matches = re.findall(
-        r'(\d+\.\d+)MA',
-        text.upper()
-    )
+    i_matches = []
 
-    st.write("DEBUG CURRENT:", current_matches)
+    for line in text.split("\n"):
 
-    if len(current_matches) >= 3:
+        if "MA" in line:
 
-        data["i1"] = float(current_matches[0])
-        data["i2"] = float(current_matches[1])
-        data["i3"] = float(current_matches[2])
+            nums = re.findall(
+                r'(\d+\.\d+)',
+                line
+            )
+
+            if nums:
+
+                i_matches.append(nums[0])
+
+    st.write("DEBUG CURRENT:", i_matches)
+
+    if len(i_matches) >= 3:
+
+        data["i1"] = float(i_matches[0])
+        data["i2"] = float(i_matches[1])
+        data["i3"] = float(i_matches[2])
 
 
 # --------------------
