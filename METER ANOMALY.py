@@ -338,29 +338,43 @@ def parse_meter_values(text):
         )
 
 
-    freq_match = re.search(
-        r'F[: ]*(\d+\.\d+)',
-        text
-    )
+    # --------------------
+    # FREQUENCY
+    # --------------------
 
-    if freq_match:
+    lines = text.split("\n")
 
-        freq = float(
-            freq_match.group(1)
-        )
+    for line in lines:
 
-        if 55 <= freq <= 65:
+        line = line.strip()
 
-            freq = (
-                50 +
-                freq -
-                int(freq)
-            )
+        # Ignore PF:0.448
+        # Only capture actual frequency line
 
-        data["freq"] = round(
-            freq,
-            2
-        )
+        if line.startswith("F:"):
+
+            try:
+
+                freq = float(
+                    line.split(":")[1]
+                )
+
+                # OCR correction
+                if 55 <= freq <= 65:
+
+                    freq = (
+                        50 +
+                        freq -
+                        int(freq)
+                    )
+
+                data["freq"] = round(
+                    freq,
+                    2
+                )
+
+            except:
+                pass
     return data
 # =====================================
 # ANALYSIS ENGINE
@@ -853,6 +867,9 @@ if actual_img and error_img:
     st.subheader("METER DATA")
     st.json(meter_data)
 
+    st.subheader("PTS OCR TEXT")
+    st.text(actual_text)
+    
     st.subheader("ACCURACY OCR")
     st.text(error_text)
 
