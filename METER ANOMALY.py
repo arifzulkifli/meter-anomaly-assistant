@@ -99,7 +99,7 @@ error_img = st.file_uploader(
 # OCR FUNCTION
 # =====================================
 
-def read_image(uploaded_file):
+def read_accuracy_image(uploaded_file):
 
     reader = load_reader()
 
@@ -112,6 +112,29 @@ def read_image(uploaded_file):
         cv2.COLOR_RGB2GRAY
     )
 
+    gray = cv2.resize(
+        gray,
+        None,
+        fx=3,
+        fy=3,
+        interpolation=cv2.INTER_CUBIC
+    )
+
+    gray = cv2.GaussianBlur(
+        gray,
+        (3, 3),
+        0
+    )
+
+    gray = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        11,
+        2
+    )
+
     result = reader.readtext(
         gray,
         detail=1
@@ -122,10 +145,7 @@ def read_image(uploaded_file):
     for item in result:
         texts.append(item[1])
 
-    ocr_text = "\n".join(texts)
-
-    return ocr_text
-
+    return "\n".join(texts)
 # =====================================
 # PARSE ERROR %
 # =====================================
@@ -168,104 +188,121 @@ def parse_meter_values(text):
     text = text.upper()
     text = text.replace(",", ".")
 
-    # OCR corrections from your actual OCR output
+    # OCR corrections seen on your PTS
 
     text = text.replace("UX:", "U3:")
     text = text.replace("II:", "I1:")
     text = text.replace("PFI:", "PF1:")
     text = text.replace("PFA:", "PF3:")
 
-    # -----------------
-    # Voltage
-    # -----------------
+    # --------------------
+    # VOLTAGE
+    # --------------------
 
-    u1 = re.search(r'U1[: ]*(\d+\.\d+)', text)
-    u2 = re.search(r'U2[: ]*(\d+\.\d+)', text)
-    u3 = re.search(r'U3[: ]*(\d+\.\d+)', text)
-
-    if u1:
-        data["u1"] = float(u1.group(1))
-
-    if u2:
-        data["u2"] = float(u2.group(1))
-
-    if u3:
-        data["u3"] = float(u3.group(1))
-
-    # -----------------
-    # Current
-    # -----------------
-
-    i1 = re.search(r'I1[: ]*(\d+\.\d+)', text)
-    i2 = re.search(r'I2[: ]*(\d+\.\d+)', text)
-    i3 = re.search(r'I3[: ]*(\d+\.\d+)', text)
-
-    if i1:
-        data["i1"] = float(i1.group(1))
-
-    if i2:
-        data["i2"] = float(i2.group(1))
-
-    if i3:
-        data["i3"] = float(i3.group(1))
-
-    # -----------------
-    # Power Factor
-    # -----------------
-
-    pf1 = re.search(r'PF1[: ]*(-?\d+\.\d+)', text)
-    pf2 = re.search(r'PF2[: ]*(-?\d+\.\d+)', text)
-    pf3 = re.search(r'PF3[: ]*(-?\d+\.\d+)', text)
-
-    if pf1:
-        data["pf1"] = float(pf1.group(1))
-
-    if pf2:
-        data["pf2"] = float(pf2.group(1))
-
-    if pf3:
-        data["pf3"] = float(pf3.group(1))
-
-    total_pf = re.search(
-        r'PF[: ]*(\d+\.\d+)',
+    voltage_matches = re.findall(
+        r'U[0-9A-Z]+[: ]*(\d+\.\d+)',
         text
     )
 
-    if total_pf:
-        data["pf_total"] = float(
-            total_pf.group(1)
-        )
+    valid_voltages = []
 
-    # -----------------
-    # Frequency
-    # -----------------
+    for v in voltage_matches:
 
-    lines = text.split("\n")
+        try:
 
-    for line in lines:
+            value = float(v)
 
-        line = line.strip()
+            if 200 <= value <= 300:
+                valid_voltages.append(value)
 
-        if line.startswith("F:"):
+        except:
+            pass
 
-            try:
+    if len(valid_voltages) >= 3:
 
-                freq = float(
-                    line.split(":")[1]
-                )
+        data["u1"] = valid_voltages[0]
+        data["u2"] = valid_voltages[1]
+        data["u3"] = valid_voltages[2]
 
-                # 60.06 -> 50.06 OCR correction
+    # --------------------
+    # CURRENT
+    # --------------------
 
-                if 55 <= freq <= 65:
+    current_matches = re.findall(
+        r'I[0-9A-Z]+[: ]*(\d+\.\d+)',
+        text
+    )
 
-                    freq = 50 + (
-                        freq - int(freq)
-                    )
+    valid_currents = []
 
-                data["freq"] = round(freq, 2)
+    for i in current_matches:
 
-            except:
-                pass
+        try:
+
+            value = float(i)
+
+            if value > 1:
+                valid_currents.append(value)
+
+        except:
+            pass
+
+    if len(valid_currents) >= 3:
+
+        data["i1"] = valid_currents[0]
+        data["i2"] = valid_currents[1]
+        data["i3"] = valid_currents[2]
+
+    # --------------------
+    # PF
+    # --------------------
+
+    pf_matches = re.findall(
+        r'PF[0-9A-Z]*[: ]*(-?\d+\.\d+)',
+        text
+    )
+
+    pf_values = []
+
+    for x in pf_matches:
+
+        try:
+
+            value = float(x)
+
+            if -1 <= value <= 1:
+                pf_values.append(value)
+
+        except:
+            pass
+
+    if len(pf_values) >= 4:
+
+        data["pf1"] = pf_values[0]
+        data["pf2"] = pf_values[1]
+        data["pf3"] = pf_values[2]
+        data["pf_total"] = pf_values[3]
+
+    # --------------------
+    # FREQUENCY
+    # --------------------
+
+    freq_match = re.search(
+        r'F[: ]*(\d+\.\d+)',
+        text
+    )
+
+    if freq_match:
+
+        freq = float(freq_match.group(1))
+
+        if 55 <= freq <= 65:
+
+            freq = 50 + (
+                freq - int(freq)
+            )
+
+        data["freq"] = round(freq, 2)
 
     return data
 # =====================================
@@ -742,8 +779,8 @@ if actual_img and error_img:
 
         actual_text = read_image(actual_img)
 
-        error_text = read_image(error_img)
-        
+        error_text = read_accuracy_image(error_img)
+
         st.subheader("ACCURACY OCR")
         st.text(error_text)
 
