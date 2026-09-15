@@ -284,28 +284,35 @@ def parse_meter_values(text):
 # CURRENT
 # --------------------
 
-    i_matches = []
+    current_matches = re.findall(
+        r'(\d+\.\d+)MA',
+        text.upper()
+    )
 
-    for line in text.split("\n"):
+    st.write("DEBUG CURRENT:", current_matches)
 
-        if "MA" in line:
+# Remove phase-phase voltages accidentally captured
+    filtered_currents = []
 
-            nums = re.findall(
-                r'(\d+\.\d+)',
-                line
-            )
+    for val in current_matches:
 
-            if nums:
+        try:
 
-                i_matches.append(nums[0])
+            num = float(val)
 
-    st.write("DEBUG CURRENT:", i_matches)
+        # Current values around 298mA
+            if 100 <= num <= 400:
 
-    if len(i_matches) >= 3:
+                filtered_currents.append(num)
 
-        data["i1"] = float(i_matches[0])
-        data["i2"] = float(i_matches[1])
-        data["i3"] = float(i_matches[2])
+        except:
+            pass
+
+    if len(filtered_currents) >= 3:
+
+        data["i1"] = filtered_currents[0]
+        data["i2"] = filtered_currents[1]
+        data["i3"] = filtered_currents[2]
 
 
 # --------------------
