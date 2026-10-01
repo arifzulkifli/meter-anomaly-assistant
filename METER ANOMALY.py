@@ -290,7 +290,6 @@ def parse_meter_values(text):
         text.upper()
     )
 
-    st.write("DEBUG CURRENT:", current_values)
 
     if len(current_values) >= 3:
 
