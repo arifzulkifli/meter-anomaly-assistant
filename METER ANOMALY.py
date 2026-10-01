@@ -677,7 +677,7 @@ Complaint Type:
 
 Current evidence suggests the meter is measuring within tolerance (where accuracy is acceptable).
 
-Investigation should focus on:
+Investigation should focus on:OCR Verification
 
 • Additional customer load
 • Air conditioning usage
@@ -712,76 +712,93 @@ Further investigation is recommended before concluding that the meter is faulty.
 # =====================================
 # OCR VERIFICATION
 # =====================================
-
 def verify_ocr_values(meter_data, error_value):
-
-    st.subheader("OCR Verification")
 
     st.caption(
         "Verify OCR readings before running analysis."
     )
 
-    col1, col2 = st.columns(2)
+    with st.form("ocr_verification_form"):
 
-    with col1:
+        col1, col2 = st.columns(2)
 
-        u1 = st.number_input(
-            "U1 (V)",
-            value=float(meter_data.get("u1", 0))
+        with col1:
+
+            u1 = st.number_input(
+                "U1 (V)",
+                value=float(meter_data.get("u1", 0))
+            )
+
+            u2 = st.number_input(
+                "U2 (V)",
+                value=float(meter_data.get("u2", 0))
+            )
+
+            u3 = st.number_input(
+                "U3 (V)",
+                value=float(meter_data.get("u3", 0))
+            )
+
+            i1 = st.number_input(
+                "I1 (mA)",
+                value=float(meter_data.get("i1", 0))
+            )
+
+            i2 = st.number_input(
+                "I2 (mA)",
+                value=float(meter_data.get("i2", 0))
+            )
+
+            i3 = st.number_input(
+                "I3 (mA)",
+                value=float(meter_data.get("i3", 0))
+            )
+
+        with col2:
+
+            pf1 = st.number_input(
+                "PF1",
+                value=float(meter_data.get("pf1", 0))
+            )
+
+            pf2 = st.number_input(
+                "PF2",
+                value=float(meter_data.get("pf2", 0))
+            )
+
+            pf3 = st.number_input(
+                "PF3",
+                value=float(meter_data.get("pf3", 0))
+            )
+
+            freq = st.number_input(
+                "Frequency (Hz)",
+                value=float(meter_data.get("freq", 50))
+            )
+
+            accuracy = st.number_input(
+                "Accuracy Error (%)",
+                value=float(error_value or 0)
+            )
+
+        submitted = st.form_submit_button(
+            "✅ Confirm Readings"
         )
 
-        u2 = st.number_input(
-            "U2 (V)",
-            value=float(meter_data.get("u2", 0))
-        )
+    verified_data = {
+        "u1": u1,
+        "u2": u2,
+        "u3": u3,
+        "i1": i1,
+        "i2": i2,
+        "i3": i3,
+        "pf1": pf1,
+        "pf2": pf2,
+        "pf3": pf3,
+        "freq": freq
+    }
 
-        u3 = st.number_input(
-            "U3 (V)",
-            value=float(meter_data.get("u3", 0))
-        )
-
-        i1 = st.number_input(
-            "I1 (A)",
-            value=float(meter_data.get("i1", 0))
-        )
-
-        i2 = st.number_input(
-            "I2 (A)",
-            value=float(meter_data.get("i2", 0))
-        )
-
-        i3 = st.number_input(
-            "I3 (A)",
-            value=float(meter_data.get("i3", 0))
-        )
-
-    with col2:
-
-        pf1 = st.number_input(
-            "PF1",
-            value=float(meter_data.get("pf1", 0))
-        )
-
-        pf2 = st.number_input(
-            "PF2",
-            value=float(meter_data.get("pf2", 0))
-        )
-
-        pf3 = st.number_input(
-            "PF3",
-            value=float(meter_data.get("pf3", 0))
-        )
-
-        freq = st.number_input(
-            "Frequency (Hz)",
-            value=float(meter_data.get("freq", 50))
-        )
-
-        accuracy = st.number_input(
-            "Accuracy Error (%)",
-            value=float(error_value or 0)
-        )
-
+    return verified_data, accuracy, submitted
     # ==========================
     # Engineering Validation
     # ==========================
@@ -826,7 +843,7 @@ def verify_ocr_values(meter_data, error_value):
         "freq": freq
     }
 
-    return verified_data, accuracy
+    return verified_data, accuracy, submitted
 # =====================================
 # OCR PROCESSING
 # =====================================
@@ -866,14 +883,22 @@ if actual_img and error_img:
 
     st.subheader("OCR Verification")
 
-    verified_data, verified_error = verify_ocr_values(
+    verified_data, verified_error, confirmed = verify_ocr_values(
         meter_data,
         error_value
     )
 
-    if st.button(
-        "✅ Confirm Readings"
-    ):
+    if confirmed:
+
+        st.session_state["verified"] = True
+
+        st.session_state["verified_data"] = verified_data
+
+        st.session_state["verified_error"] = verified_error
+
+        st.success(
+            "Readings confirmed."
+        )
 
         st.session_state["verified"] = True
 
