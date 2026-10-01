@@ -866,17 +866,6 @@ if actual_img and error_img:
 
     st.success("OCR Extraction Completed")
 
-    # Debug
-
-    st.subheader("METER DATA")
-    st.json(meter_data)
-
-    st.subheader("PTS OCR TEXT")
-    st.text(actual_text)
-
-    st.subheader("ACCURACY OCR")
-    st.text(error_text)
-
     # Force Verification Section
 
     st.divider()
